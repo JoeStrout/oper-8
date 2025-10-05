@@ -18,7 +18,7 @@
 - Flags: Zero, Carry, Negative
 
 **Key Decisions:**
-- R0 is special only for zero-page memory operations (LOADZ, STORZ) and LD0
+- R0 is special only for zero-page memory operations (LOADZ, STORZ) and LDI0
 - Register pairs (Rx:Rx+1) form 16-bit pointers/values
 - Register numbers wrap at 4 bits (R15:R0 is a valid pair)
 - R14:R15 conventionally used as stack pointer (SP)
@@ -33,7 +33,7 @@
 |-----|--------|----------|-------------|
 | $10 | LDLO | Rx, #imm | Load immediate into lower nibble of Rx (clear upper) |
 | $11 | LDHI | Rx, #imm | Load immediate into upper nibble of Rx (preserve lower) |
-| $12 | LD0 | #imm | Load immediate 8-bit value into R0 |
+| $12 | LDI0 | #imm | Load immediate 8-bit value into R0 |
 | $13 | LDI16 | Rx, Ry | Load 16-bit immediate from next word into Rx:Ry |
 | $14 | MOV | Rx, Ry | Copy Ry to Rx |
 | $15 | SWAP | Rx, Ry | Exchange Rx ↔ Ry |

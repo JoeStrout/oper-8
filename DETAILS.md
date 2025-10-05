@@ -51,8 +51,8 @@ Rx[3:0] ← unchanged
 
 ---
 
-### $12 - LD0 (Load Immediate to R0)
-**Format:** `LD0 #imm`
+### $12 - LDI0 (Load Immediate to R0)
+**Format:** `LDI0 #imm`
 **Encoding:** `$12 [iiii iiii]`
 
 **Operation:**
