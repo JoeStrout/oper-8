@@ -125,42 +125,32 @@ export class CPU {
         this.pc += 2;
         break;
 
-      // LDLO
-      case 0x10:
-        this.registers[rx] = imm & 0x0F;
-        this.pc += 2;
-        break;
-
-      // LDHI
-      case 0x11:
-        this.registers[rx] = (this.registers[rx] & 0x0F) | ((imm & 0x0F) << 4);
-        this.pc += 2;
-        break;
-
-      // LDI0
-      case 0x12:
-        this.registers[0] = imm;
-        this.pc += 2;
-        break;
-
-      // LDI16
-      case 0x13: {
-        const byte1 = this.memory[this.pc + 2];
-        const byte2 = this.memory[this.pc + 3];
-        this.registers[rx] = byte1;
-        this.registers[ry] = byte2;
-        this.pc += 4;
-        break;
-      }
+      // LDI0-LDI15
+      case 0x10: this.registers[0] = imm; this.pc += 2; break;
+      case 0x11: this.registers[1] = imm; this.pc += 2; break;
+      case 0x12: this.registers[2] = imm; this.pc += 2; break;
+      case 0x13: this.registers[3] = imm; this.pc += 2; break;
+      case 0x14: this.registers[4] = imm; this.pc += 2; break;
+      case 0x15: this.registers[5] = imm; this.pc += 2; break;
+      case 0x16: this.registers[6] = imm; this.pc += 2; break;
+      case 0x17: this.registers[7] = imm; this.pc += 2; break;
+      case 0x18: this.registers[8] = imm; this.pc += 2; break;
+      case 0x19: this.registers[9] = imm; this.pc += 2; break;
+      case 0x1A: this.registers[10] = imm; this.pc += 2; break;
+      case 0x1B: this.registers[11] = imm; this.pc += 2; break;
+      case 0x1C: this.registers[12] = imm; this.pc += 2; break;
+      case 0x1D: this.registers[13] = imm; this.pc += 2; break;
+      case 0x1E: this.registers[14] = imm; this.pc += 2; break;
+      case 0x1F: this.registers[15] = imm; this.pc += 2; break;
 
       // MOV
-      case 0x14:
+      case 0x20:
         this.registers[rx] = this.registers[ry];
         this.pc += 2;
         break;
 
       // SWAP
-      case 0x15: {
+      case 0x21: {
         const temp = this.registers[rx];
         this.registers[rx] = this.registers[ry];
         this.registers[ry] = temp;
@@ -169,7 +159,7 @@ export class CPU {
       }
 
       // LOAD
-      case 0x20: {
+      case 0x22: {
         const addr = (this.registers[ry] << 8) | this.registers[(ry + 1) & 0x0F];
         this.registers[rx] = this.memory[addr];
         this.pc += 2;
@@ -177,7 +167,7 @@ export class CPU {
       }
 
       // STOR
-      case 0x21: {
+      case 0x23: {
         const addr = (this.registers[ry] << 8) | this.registers[(ry + 1) & 0x0F];
         this.memory[addr] = this.registers[rx];
         this.pc += 2;
@@ -185,13 +175,13 @@ export class CPU {
       }
 
       // LOADZ
-      case 0x22:
+      case 0x24:
         this.registers[0] = this.memory[imm];
         this.pc += 2;
         break;
 
       // STORZ
-      case 0x23:
+      case 0x25:
         this.memory[imm] = this.registers[0];
         this.pc += 2;
         break;
@@ -504,6 +494,24 @@ export class CPU {
         break;
       }
 
+      // PRINT
+      case 0x70:
+        if (this.onCharOutput) {
+          this.onCharOutput(this.registers[rx]);
+        }
+        this.pc += 2;
+        break;
+
+      // INPUT
+      case 0x71:
+        if (this.onCharInput) {
+          this.registers[rx] = this.onCharInput();
+        } else {
+          this.registers[rx] = 0;
+        }
+        this.pc += 2;
+        break;
+
       // HLT
       case 0xFF:
         this.halted = true;
@@ -513,27 +521,6 @@ export class CPU {
       default:
         this.fault(0x01); // FAULT_INVALID_OPCODE
         break;
-    }
-
-    // Handle memory-mapped I/O after instruction execution
-    this.handleMemoryMappedIO();
-  }
-
-  /**
-   * Handle memory-mapped I/O
-   */
-  private handleMemoryMappedIO(): void {
-    // Character output at $00FA
-    const outputChar = this.memory[0x00FA];
-    if (outputChar !== 0 && this.onCharOutput) {
-      this.onCharOutput(outputChar);
-      this.memory[0x00FA] = 0; // Clear after output
-    }
-
-    // Character input at $00FB
-    if (this.onCharInput) {
-      const inputChar = this.onCharInput();
-      this.memory[0x00FB] = inputChar;
     }
   }
 

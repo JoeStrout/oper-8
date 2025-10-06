@@ -7,8 +7,8 @@
 export interface AssembledInstruction {
   opcode: number;
   operand: number;
-  length: number; // 2 or 4 (for LDI16)
-  immediate?: number[]; // For LDI16, the 2 immediate bytes
+  length: number; // Always 2
+  immediate?: number[]; // Reserved for future multi-byte instructions
 }
 
 export class AssemblerError extends Error {
@@ -78,57 +78,96 @@ export function assemble(instruction: string): AssembledInstruction {
     case 'NOP':
       return { opcode: 0x00, operand: 0x00, length: 2 };
 
-    // Data Movement
-    case 'LDLO': {
-      if (operands.length !== 2) {
-        throw new AssemblerError('LDLO requires 2 operands: Rx, #imm');
-      }
-      const rx = parseRegister(operands[0]);
-      const imm = parseImmediate(operands[1]);
-      return { opcode: 0x10, operand: (rx << 4) | (imm & 0x0F), length: 2 };
-    }
-
-    case 'LDHI': {
-      if (operands.length !== 2) {
-        throw new AssemblerError('LDHI requires 2 operands: Rx, #imm');
-      }
-      const rx = parseRegister(operands[0]);
-      const imm = parseImmediate(operands[1]);
-      return { opcode: 0x11, operand: (rx << 4) | (imm & 0x0F), length: 2 };
-    }
-
+    // Load Immediate
     case 'LDI0': {
-      if (operands.length !== 1) {
-        throw new AssemblerError('LDI0 requires 1 operand: #imm');
-      }
+      if (operands.length !== 1) throw new AssemblerError('LDI0 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x10, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI1': {
+      if (operands.length !== 1) throw new AssemblerError('LDI1 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x11, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI2': {
+      if (operands.length !== 1) throw new AssemblerError('LDI2 requires 1 operand: #imm');
       const imm = parseImmediate(operands[0]);
       return { opcode: 0x12, operand: imm & 0xFF, length: 2 };
     }
-
-    case 'LDI16': {
-      if (operands.length !== 3) {
-        throw new AssemblerError('LDI16 requires 3 operands: Rx, Ry, #imm16');
-      }
-      const rx = parseRegister(operands[0]);
-      const ry = parseRegister(operands[1]);
-      const imm16 = parseImmediate(operands[2]);
-      const high = (imm16 >> 8) & 0xFF;
-      const low = imm16 & 0xFF;
-      return {
-        opcode: 0x13,
-        operand: (rx << 4) | ry,
-        length: 4,
-        immediate: [high, low]
-      };
+    case 'LDI3': {
+      if (operands.length !== 1) throw new AssemblerError('LDI3 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x13, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI4': {
+      if (operands.length !== 1) throw new AssemblerError('LDI4 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x14, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI5': {
+      if (operands.length !== 1) throw new AssemblerError('LDI5 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x15, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI6': {
+      if (operands.length !== 1) throw new AssemblerError('LDI6 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x16, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI7': {
+      if (operands.length !== 1) throw new AssemblerError('LDI7 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x17, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI8': {
+      if (operands.length !== 1) throw new AssemblerError('LDI8 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x18, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI9': {
+      if (operands.length !== 1) throw new AssemblerError('LDI9 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x19, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI10': {
+      if (operands.length !== 1) throw new AssemblerError('LDI10 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x1A, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI11': {
+      if (operands.length !== 1) throw new AssemblerError('LDI11 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x1B, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI12': {
+      if (operands.length !== 1) throw new AssemblerError('LDI12 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x1C, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI13': {
+      if (operands.length !== 1) throw new AssemblerError('LDI13 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x1D, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI14': {
+      if (operands.length !== 1) throw new AssemblerError('LDI14 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x1E, operand: imm & 0xFF, length: 2 };
+    }
+    case 'LDI15': {
+      if (operands.length !== 1) throw new AssemblerError('LDI15 requires 1 operand: #imm');
+      const imm = parseImmediate(operands[0]);
+      return { opcode: 0x1F, operand: imm & 0xFF, length: 2 };
     }
 
+    // Data Movement
     case 'MOV': {
       if (operands.length !== 2) {
         throw new AssemblerError('MOV requires 2 operands: Rx, Ry');
       }
       const rx = parseRegister(operands[0]);
       const ry = parseRegister(operands[1]);
-      return { opcode: 0x14, operand: (rx << 4) | ry, length: 2 };
+      return { opcode: 0x20, operand: (rx << 4) | ry, length: 2 };
     }
 
     case 'SWAP': {
@@ -137,17 +176,16 @@ export function assemble(instruction: string): AssembledInstruction {
       }
       const rx = parseRegister(operands[0]);
       const ry = parseRegister(operands[1]);
-      return { opcode: 0x15, operand: (rx << 4) | ry, length: 2 };
+      return { opcode: 0x21, operand: (rx << 4) | ry, length: 2 };
     }
 
-    // Memory Access
     case 'LOAD': {
       if (operands.length !== 2) {
         throw new AssemblerError('LOAD requires 2 operands: Rx, Ry');
       }
       const rx = parseRegister(operands[0]);
       const ry = parseRegister(operands[1]);
-      return { opcode: 0x20, operand: (rx << 4) | ry, length: 2 };
+      return { opcode: 0x22, operand: (rx << 4) | ry, length: 2 };
     }
 
     case 'STOR': {
@@ -156,7 +194,7 @@ export function assemble(instruction: string): AssembledInstruction {
       }
       const rx = parseRegister(operands[0]);
       const ry = parseRegister(operands[1]);
-      return { opcode: 0x21, operand: (rx << 4) | ry, length: 2 };
+      return { opcode: 0x23, operand: (rx << 4) | ry, length: 2 };
     }
 
     case 'LOADZ': {
@@ -164,7 +202,7 @@ export function assemble(instruction: string): AssembledInstruction {
         throw new AssemblerError('LOADZ requires 1 operand: #addr');
       }
       const addr = parseImmediate(operands[0]);
-      return { opcode: 0x22, operand: addr & 0xFF, length: 2 };
+      return { opcode: 0x24, operand: addr & 0xFF, length: 2 };
     }
 
     case 'STORZ': {
@@ -172,7 +210,7 @@ export function assemble(instruction: string): AssembledInstruction {
         throw new AssemblerError('STORZ requires 1 operand: #addr');
       }
       const addr = parseImmediate(operands[0]);
-      return { opcode: 0x23, operand: addr & 0xFF, length: 2 };
+      return { opcode: 0x25, operand: addr & 0xFF, length: 2 };
     }
 
     // Arithmetic
@@ -414,6 +452,23 @@ export function assemble(instruction: string): AssembledInstruction {
       return { opcode: 0x61, operand: (rx << 4) | ry, length: 2 };
     }
 
+    // I/O
+    case 'PRINT': {
+      if (operands.length !== 1) {
+        throw new AssemblerError('PRINT requires 1 operand: Rx');
+      }
+      const rx = parseRegister(operands[0]);
+      return { opcode: 0x70, operand: rx << 4, length: 2 };
+    }
+
+    case 'INPUT': {
+      if (operands.length !== 1) {
+        throw new AssemblerError('INPUT requires 1 operand: Rx');
+      }
+      const rx = parseRegister(operands[0]);
+      return { opcode: 0x71, operand: rx << 4, length: 2 };
+    }
+
     // Misc
     case 'HLT': {
       return { opcode: 0xFF, operand: 0xFF, length: 2 };
@@ -435,22 +490,28 @@ export function disassemble(opcode: number, operand: number, nextBytes?: number[
 
   switch (opcode) {
     case 0x00: return 'NOP';
-    case 0x10: return `LDLO R${rx}, $${toHex(imm & 0x0F, 1)}`;
-    case 0x11: return `LDHI R${rx}, $${toHex(imm & 0x0F, 1)}`;
-    case 0x12: return `LDI0 $${toHex(imm)}`;
-    case 0x13: {
-      if (nextBytes && nextBytes.length >= 2) {
-        const imm16 = (nextBytes[0] << 8) | nextBytes[1];
-        return `LDI16 R${rx}, R${ry}, $${toHex(imm16, 4)}`;
-      }
-      return `LDI16 R${rx}, R${ry}, ???`;
-    }
-    case 0x14: return `MOV R${rx}, R${ry}`;
-    case 0x15: return `SWAP R${rx}, R${ry}`;
-    case 0x20: return `LOAD R${rx}, R${ry}`;
-    case 0x21: return `STOR R${rx}, R${ry}`;
-    case 0x22: return `LOADZ $${toHex(imm)}`;
-    case 0x23: return `STORZ $${toHex(imm)}`;
+    case 0x10: return `LDI0 $${toHex(imm)}`;
+    case 0x11: return `LDI1 $${toHex(imm)}`;
+    case 0x12: return `LDI2 $${toHex(imm)}`;
+    case 0x13: return `LDI3 $${toHex(imm)}`;
+    case 0x14: return `LDI4 $${toHex(imm)}`;
+    case 0x15: return `LDI5 $${toHex(imm)}`;
+    case 0x16: return `LDI6 $${toHex(imm)}`;
+    case 0x17: return `LDI7 $${toHex(imm)}`;
+    case 0x18: return `LDI8 $${toHex(imm)}`;
+    case 0x19: return `LDI9 $${toHex(imm)}`;
+    case 0x1A: return `LDI10 $${toHex(imm)}`;
+    case 0x1B: return `LDI11 $${toHex(imm)}`;
+    case 0x1C: return `LDI12 $${toHex(imm)}`;
+    case 0x1D: return `LDI13 $${toHex(imm)}`;
+    case 0x1E: return `LDI14 $${toHex(imm)}`;
+    case 0x1F: return `LDI15 $${toHex(imm)}`;
+    case 0x20: return `MOV R${rx}, R${ry}`;
+    case 0x21: return `SWAP R${rx}, R${ry}`;
+    case 0x22: return `LOAD R${rx}, R${ry}`;
+    case 0x23: return `STOR R${rx}, R${ry}`;
+    case 0x24: return `LOADZ $${toHex(imm)}`;
+    case 0x25: return `STORZ $${toHex(imm)}`;
     case 0x30: return `ADD R${rx}, R${ry}`;
     case 0x31: return `ADC R${rx}, R${ry}`;
     case 0x32: return `SUB R${rx}, R${ry}`;
@@ -479,6 +540,8 @@ export function disassemble(opcode: number, operand: number, nextBytes?: number[
     case 0x59: return `RET`;
     case 0x60: return `PUSH R${rx}, R${ry}`;
     case 0x61: return `POP R${rx}, R${ry}`;
+    case 0x70: return `PRINT R${rx}`;
+    case 0x71: return `INPUT R${rx}`;
     case 0xFF: return 'HLT';
     default: return `??? [$${toHex(opcode)} $${toHex(operand)}]`;
   }

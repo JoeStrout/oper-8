@@ -18,33 +18,45 @@
 - Flags: Zero, Carry, Negative
 
 **Key Decisions:**
-- R0 is special only for zero-page memory operations (LOADZ, STORZ) and LDI0
+- R0 is special only for zero-page memory operations (LOADZ, STORZ)
 - Register pairs (Rx:Rx+1) form 16-bit pointers/values
 - Register numbers wrap at 4 bits (R15:R0 is a valid pair)
 - R14:R15 conventionally used as stack pointer (SP)
 - Two-address instruction format (destination = first operand)
 - Carry flag enables multi-byte arithmetic via ADC/SBC
-- Input/output will mostly work via memory-mapped IO in page 0
+- Input/output via PRINT and INPUT opcodes
 
 ## Opcode Table
 
-### Data Movement (Group 1)
+### Load Immediate (Group 1)
 | Hex | Opcode | Operands | Description |
 |-----|--------|----------|-------------|
-| $10 | LDLO | Rx, #imm | Load immediate into lower nibble of Rx (clear upper) |
-| $11 | LDHI | Rx, #imm | Load immediate into upper nibble of Rx (preserve lower) |
-| $12 | LDI0 | #imm | Load immediate 8-bit value into R0 |
-| $13 | LDI16 | Rx, Ry | Load 16-bit immediate from next word into Rx:Ry |
-| $14 | MOV | Rx, Ry | Copy Ry to Rx |
-| $15 | SWAP | Rx, Ry | Exchange Rx ↔ Ry |
+| $10 | LDI0 | #imm | Load immediate 8-bit value into R0 |
+| $11 | LDI1 | #imm | Load immediate 8-bit value into R1 |
+| $12 | LDI2 | #imm | Load immediate 8-bit value into R2 |
+| $13 | LDI3 | #imm | Load immediate 8-bit value into R3 |
+| $14 | LDI4 | #imm | Load immediate 8-bit value into R4 |
+| $15 | LDI5 | #imm | Load immediate 8-bit value into R5 |
+| $16 | LDI6 | #imm | Load immediate 8-bit value into R6 |
+| $17 | LDI7 | #imm | Load immediate 8-bit value into R7 |
+| $18 | LDI8 | #imm | Load immediate 8-bit value into R8 |
+| $19 | LDI9 | #imm | Load immediate 8-bit value into R9 |
+| $1A | LDI10 | #imm | Load immediate 8-bit value into R10 |
+| $1B | LDI11 | #imm | Load immediate 8-bit value into R11 |
+| $1C | LDI12 | #imm | Load immediate 8-bit value into R12 |
+| $1D | LDI13 | #imm | Load immediate 8-bit value into R13 |
+| $1E | LDI14 | #imm | Load immediate 8-bit value into R14 |
+| $1F | LDI15 | #imm | Load immediate 8-bit value into R15 |
 
-### Memory Access (Group 2)
+### Data Movement (Group 2)
 | Hex | Opcode | Operands | Description |
 |-----|--------|----------|-------------|
-| $20 | LOAD | Rx, Ry | Load Rx from address [Ry:Ry+1] |
-| $21 | STOR | Rx, Ry | Store Rx to address [Ry:Ry+1] |
-| $22 | LOADZ | #addr | Load R0 from zero-page [$00addr] |
-| $23 | STORZ | #addr | Store R0 to zero-page [$00addr] |
+| $20 | MOV | Rx, Ry | Copy Ry to Rx |
+| $21 | SWAP | Rx, Ry | Exchange Rx ↔ Ry |
+| $22 | LOAD | Rx, Ry | Load Rx from address [Ry:Ry+1] |
+| $23 | STOR | Rx, Ry | Store Rx to address [Ry:Ry+1] |
+| $24 | LOADZ | #addr | Load R0 from zero-page [$00addr] |
+| $25 | STORZ | #addr | Store R0 to zero-page [$00addr] |
 
 ### Arithmetic (Group 3)
 | Hex | Opcode | Operands | Description |
@@ -90,13 +102,15 @@
 | $60 | PUSH | Rx, Ry | Push registers from Rx toward Ry (inclusive) |
 | $61 | POP | Rx, Ry | Pop registers from Rx toward Ry (inclusive) |
 
-### Miscellaneous (Group 7)
+### I/O and Miscellaneous (Group 7)
 | Hex | Opcode | Operands | Description |
 |-----|--------|----------|-------------|
+| $70 | PRINT | Rx | Output value of Rx as character to stdout |
+| $71 | INPUT | Rx | Store next byte from stdin to Rx ($00 if none available) |
 | $00 | NOP | - | No operation |
 | $FF | HLT | - | Halt execution |
 
-## Total Opcodes: 39
+## Total Opcodes: 38
 
 This leaves significant room for future expansion (I/O ports, interrupts, etc.).
 
@@ -108,13 +122,8 @@ This leaves significant room for future expansion (I/O ports, interrupts, etc.).
  Rx   Ry
 ```
 
-**Single 8-bit immediate** (LDLO, LDHI, LOADZ, STORZ, JMP, etc.):
+**Single 8-bit immediate** (LDI0-LDI15, LOADZ, STORZ, JMP, etc.):
 ```
 [iiii iiii]
  8-bit value
 ```
-
-**LDI16 special case:**
-- Fully loads two registers at once from 2 bytes immediately following
-- Operand byte specifies registers Rx:Ry to load
-- Following word may be thought of as 16-bit value, or two 8-bit values for Rx and Ry respectively (thanks to our big-endian byte order)

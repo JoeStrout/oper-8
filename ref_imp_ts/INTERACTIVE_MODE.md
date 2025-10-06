@@ -53,8 +53,8 @@ Registers:
   R0: 42  R1: 00  R2: 00  R3: 00
   ...
 
-oper8> !LDLO R1, $5
-Executed: LDLO R1, $5
+oper8> !LDI1 $5
+Executed: LDI1 $5
 === CPU State ===
 PC: 0200  Flags: Z=0 C=0 N=0
 Registers:
@@ -70,10 +70,17 @@ Registers:
   ...
 ```
 
-**Loading 16-bit values:**
+**Loading values into any register:**
 ```
-oper8> !LDI16 R2, R3, $1234
-Executed: LDI16 R2, R3, $1234
+oper8> !LDI2 $12
+Executed: LDI2 $12
+=== CPU State ===
+Registers:
+  R0: 00  R1: 00  R2: 12  R3: 00
+  ...
+
+oper8> !LDI3 $34
+Executed: LDI3 $34
 === CPU State ===
 Registers:
   R0: 00  R1: 00  R2: 12  R3: 34
@@ -83,7 +90,7 @@ Registers:
 **Testing logical operations:**
 ```
 oper8> !LDI0 $F0
-oper8> !LDLO R1, $0F
+oper8> !LDI1 $0F
 oper8> !OR R0, R1
 Executed: OR R0, R1
 === CPU State ===
@@ -95,7 +102,7 @@ Registers:
 **Testing bit operations:**
 ```
 oper8> !LDI0 $80
-oper8> !LDLO R1, $80
+oper8> !LDI1 $80
 oper8> !TEST R0, R1
 Executed: TEST R0, R1
 === CPU State ===
@@ -140,17 +147,17 @@ Address should be in hexadecimal (without `$` prefix).
 Build a simple "Hello" program:
 ```
 oper8> @0200 LDI0 $48
-Assembled at 0200: 12 48
+Assembled at 0200: 10 48
 
-oper8> @0202 STORZ $FA
-Assembled at 0202: 23 FA
+oper8> @0202 PRINT R0
+Assembled at 0202: 70 00
 
 oper8> @0204 HLT
 Assembled at 0204: FF FF
 
 oper8> dis 0200 3
-0200: 12 48  LDI0 $48
-0202: 23 FA  STORZ $FA
+0200: 10 48  LDI0 $48
+0202: 70 00  PRINT R0
 0204: FF FF  HLT
 
 oper8> run
@@ -170,8 +177,8 @@ Assembled at 0200: 12 00
 oper8> @0202 INC R0
 Assembled at 0202: 34 00
 
-oper8> @0204 LDLO R1, $0A
-Assembled at 0204: 10 1A
+oper8> @0204 LDI1 $0A
+Assembled at 0204: 11 0A
 
 oper8> @0206 CMP R0, R1
 Assembled at 0206: 36 01
@@ -183,9 +190,9 @@ oper8> @020A HLT
 Assembled at 020A: FF FF
 
 oper8> dis 0200 6
-0200: 12 00  LDI0 $00
+0200: 10 00  LDI0 $00
 0202: 34 00  INC R0
-0204: 10 1A  LDLO R1, $0A
+0204: 11 0A  LDI1 $0A
 0206: 36 01  CMP R0, R1
 0208: 53 F8  JNZ -8
 020A: FF FF  HLT
@@ -228,11 +235,13 @@ PC set to 0400
 oper8> asm
 Assembling at PC=0400 (enter blank line to exit):
   LDI0 $06
-  0400: 12 06 ; LDI0 $06
-  LDLO R1, $1
-  0402: 10 11 ; LDLO R1, $1
-  LDI16 R2, R3, $1234
-  0404: 13 23 12 34 ; LDI16 R2, R3, $1234
+  0400: 10 06 ; LDI0 $06
+  LDI1 $07
+  0402: 11 07 ; LDI1 $07
+  LDI2 $12
+  0404: 12 12 ; LDI2 $12
+  LDI3 $34
+  0406: 13 34 ; LDI3 $34
   $ABCD
   0408: AB CD ; data word $ABCD
   JMPL R2, R3
@@ -241,12 +250,12 @@ Assembling at PC=0400 (enter blank line to exit):
 Assembly complete. 12 bytes written.
 
 oper8> dis 0400 6
-0400: 12 06  LDI0 $06
-0402: 10 11  LDLO R1, $01
-0404: 13 23  LDI16 R2, R3, $1234
+0400: 10 06  LDI0 $06
+0402: 11 07  LDI1 $07
+0404: 12 12  LDI2 $12
+0406: 13 34  LDI3 $34
 0408: AB CD  ??? [$AB $CD]
 040A: 51 23  JMPL R2, R3
-040C: 00 00  NOP
 ```
 
 **Workflow:**
@@ -265,7 +274,7 @@ Display all available commands.
 oper8> help
 Commands:
   !<instruction>  - Execute assembly instruction immediately (PC unchanged)
-                    Example: !LDLO R5, $A
+                    Example: !LDI5 $A
   @<addr> <inst>  - Assemble instruction into memory at address
                     Example: @0200 ADD R1, R2
   load <file>     - Load binary file into memory at PC
@@ -378,8 +387,8 @@ Goodbye!
 
 ```
 oper8> !LDI0 $01        # F(0) = 1
-oper8> !LDLO R1, $01    # F(1) = 1
-oper8> !LDLO R2, $08    # Count 8 iterations
+oper8> !LDI1 $01        # F(1) = 1
+oper8> !LDI2 $08        # Count 8 iterations
 oper8> !ADD R0, R1      # F(n) = F(n-1) + F(n-2)
 oper8> !SWAP R0, R1     # Shift values
 oper8> !DEC R2          # Decrement counter
@@ -395,10 +404,10 @@ Registers:
 
 ```
 oper8> !LDI0 $48        # ASCII 'H'
-oper8> !STORZ $FA       # Write to output port
+oper8> !PRINT R0        # Print character
 H
 oper8> !LDI0 $69        # ASCII 'i'
-oper8> !STORZ $FA       # Write to output port
+oper8> !PRINT R0        # Print character
 i
 ```
 
@@ -411,9 +420,9 @@ PC set to 0200
 oper8> asm
 Assembling at PC=0200 (enter blank line to exit):
   LDI0 $06
-  0200: 12 06 ; LDI0 $06
-  LDLO R1, $07
-  0202: 10 17 ; LDLO R1, $07
+  0200: 10 06 ; LDI0 $06
+  LDI1 $07
+  0202: 11 07 ; LDI1 $07
   MUL R0, R1
   0204: 37 01 ; MUL R0, R1
   HLT
@@ -422,8 +431,8 @@ Assembling at PC=0200 (enter blank line to exit):
 Assembly complete. 8 bytes written.
 
 oper8> dis 0200 4
-0200: 12 06  LDI0 $06
-0202: 10 17  LDLO R1, $07
+0200: 10 06  LDI0 $06
+0202: 11 07  LDI1 $07
 0204: 37 01  MUL R0, R1
 0206: FF FF  HLT
 
@@ -441,7 +450,7 @@ Result: R0:R1 = $002A = 42 decimal
 
 ```
 oper8> !LDI0 $05
-oper8> !LDLO R1, $00    # Set R1 to 0 (divisor)
+oper8> !LDI1 $00        # Set R1 to 0 (divisor)
 oper8> !DIV R0, R1      # Divide by zero - triggers fault!
 Executed: DIV R0, R1
 === CPU State ===
@@ -463,21 +472,21 @@ PC set to 0300
 oper8> asm
 Assembling at PC=0300 (enter blank line to exit):
   LDI0 $00
-  0300: 12 00 ; LDI0 $00
-  LDLO R1, $03
-  0302: 10 13 ; LDLO R1, $03
-  LDHI R1, $03
-  0304: 11 13 ; LDHI R1, $03
-  LOAD R2, R1
-  0306: 20 21 ; LOAD R2, R1
-  ADD R0, R2
-  0308: 30 02 ; ADD R0, R2
-  INC R1
-  030A: 34 10 ; INC R1
-  LDLO R3, $04
-  030C: 10 34 ; LDLO R3, $04
-  CMP R1, R3
-  030E: 36 13 ; CMP R1, R3
+  0300: 10 00 ; LDI0 $00
+  LDI1 $03
+  0302: 11 03 ; LDI1 $03
+  LDI2 $30
+  0304: 12 30 ; LDI2 $30
+  LOAD R3, R1
+  0306: 22 31 ; LOAD R3, R1
+  ADD R0, R3
+  0308: 30 03 ; ADD R0, R3
+  INC R2
+  030A: 34 20 ; INC R2
+  LDI4 $34
+  030C: 14 34 ; LDI4 $34
+  CMP R2, R4
+  030E: 36 24 ; CMP R2, R4
   JC $F6
   0310: 54 F6 ; JC $F6
   HLT
@@ -522,7 +531,7 @@ Result: R0 = $64 = 100 decimal (sum of 10 + 20 + 30 + 40)
 4. **Use `dis` to verify** - Always check your assembled code looks correct
 4. **Save PC with `regs`** - Note the PC value before experiments so you can restore state
 5. **Combine commands** - Use `!` to set up registers, then `step` to execute program code
-6. **Memory-mapped I/O** - Use `$00FA` for output, `$00FB` for input (returns 0 if none available)
+6. **I/O instructions** - Use `PRINT Rx` for output, `INPUT Rx` for input (returns 0 if none available)
 7. **Fault handling** - Check `$00FC-$00FD` for fault PC, `$00FE-$00FF` for handler vector
 
 ## Number Formats
@@ -535,11 +544,10 @@ Result: R0 = $64 = 100 decimal (sum of 10 + 20 + 30 + 40)
 
 **Load full 8-bit value into any register:**
 ```
-!LDLO R5, $A      # Lower nibble
-!LDHI R5, $B      # Upper nibble → R5 = $BA
+!LDI5 $BA         # R5 = $BA directly
 ```
 
-**Load full 8-bit value into R0 (shortcut):**
+**Load into R0:**
 ```
 !LDI0 $42         # R0 = $42 directly
 ```

@@ -2,27 +2,29 @@
 // Format: preconditions; instruction(s); postconditions
 // All values in hex, flags 0 or 1
 
-// === Data Movement Instructions ===
+// === Load Immediate Instructions ===
 
-// LDLO - Load Low Nibble (clears upper nibble, loads lower 4 bits)
-R1:FF; LDLO R1, $A; R1:0A
-R2:AB; LDLO R2, $5; R2:05
-R3:00; LDLO R3, $F; R3:0F
-
-// LDHI - Load High Nibble (preserves lower nibble, loads upper 4 bits)
-R1:0F; LDHI R1, $A; R1:AF
-R2:03; LDHI R2, $B; R2:B3
-R3:00; LDHI R3, $F; R3:F0
-
-// LDI0 - Load immediate into R0
+// LDI0-LDI15 - Load immediate into registers
 ; LDI0 $42; R0:42
 ; LDI0 $00; R0:00
 ; LDI0 $FF; R0:FF
+; LDI1 $12; R1:12
+; LDI2 $34; R2:34
+; LDI3 $56; R3:56
+; LDI4 $78; R4:78
+; LDI5 $9A; R5:9A
+; LDI6 $BC; R6:BC
+; LDI7 $DE; R7:DE
+; LDI8 $F0; R8:F0
+; LDI9 $11; R9:11
+; LDI10 $22; R10:22
+; LDI11 $33; R11:33
+; LDI12 $44; R12:44
+; LDI13 $55; R13:55
+; LDI14 $66; R14:66
+; LDI15 $77; R15:77
 
-// LDI16 - Load 16-bit immediate into register pair
-; LDI16 R1, R2, $1234; R1:12 R2:34
-; LDI16 R5, R6, $ABCD; R5:AB R6:CD
-; LDI16 R0, R1, $0000; R0:00 R1:00
+// === Data Movement Instructions ===
 
 // MOV - Copy register
 R1:42 R2:00; MOV R2, R1; R2:42 R1:42

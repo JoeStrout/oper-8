@@ -9,51 +9,14 @@ The OPER-8 CPU has three status flags:
 - **C (Carry)**: Set on arithmetic overflow/carry out
 - **N (Negative)**: Set when bit 7 of result is 1
 
-## Data Movement Instructions
+## Load Immediate Instructions
 
-### $10 - LDLO (Load Low Nibble)
-**Format:** `LDLO Rx, #imm`
-**Encoding:** `$10 [xxxx iiii]`
+### $10 - LDI0 through $1F - LDI15 (Load Immediate to R0 - R15)
 
-**Operation:**
-```
-Rx[7:4] ← 0
-Rx[3:0] ← imm[3:0]
-```
+There are 16 versions of this instruction, differing only in the target register.  The mnemonics are `LDI0` through `LDI15`, encoded as $10 through $1F.  Details for `LDI0`:
 
-**Flags:** None affected
-
-**Details:**
-- Clears upper nibble (bits 7-4) to 0
-- Loads immediate value's lower 4 bits into lower nibble (bits 3-0)
-- Upper 4 bits of immediate value are ignored
-- Useful for loading small constants (0-15)
-
----
-
-### $11 - LDHI (Load High Nibble)
-**Format:** `LDHI Rx, #imm`
-**Encoding:** `$11 [xxxx iiii]`
-
-**Operation:**
-```
-Rx[7:4] ← imm[3:0]
-Rx[3:0] ← unchanged
-```
-
-**Flags:** None affected
-
-**Details:**
-- Preserves lower nibble (bits 3-0)
-- Loads immediate value's lower 4 bits into upper nibble (bits 7-4)
-- Upper 4 bits of immediate value are ignored
-- Combined with LDLO, allows loading any 8-bit value in 2 instructions
-
----
-
-### $12 - LDI0 (Load Immediate to R0)
 **Format:** `LDI0 #imm`
-**Encoding:** `$12 [iiii iiii]`
+**Encoding:** `$10 [iiii iiii]`
 
 **Operation:**
 ```
@@ -64,36 +27,15 @@ R0 ← imm
 
 **Details:**
 - Loads 8-bit immediate value directly into R0
-- Provides efficient single-instruction load for R0
 - Full 8-bit operand byte used as immediate value
 
 ---
 
-### $13 - LDI16 (Load 16-bit Immediate)
-**Format:** `LDI16 Rx, Ry`
-**Encoding:** `$13 [xxxx yyyy]` followed by 2-byte immediate
+## Data Movement Instructions
 
-**Operation:**
-```
-Rx ← memory[PC+2]
-Ry ← memory[PC+3]
-PC ← PC + 4
-```
-
-**Flags:** None affected
-
-**Details:**
-- Loads 16-bit immediate from next 2 bytes in memory
-- First byte goes to Rx, second byte to Ry (big-endian)
-- Total instruction length: 4 bytes (opcode + operand + 2 immediate bytes)
-- Can form 16-bit value in register pair Rx:Ry
-- PC advances by 4 (instead of the usual 2) to skip over immediate data
-
----
-
-### $14 - MOV (Move Register)
+### $20 - MOV (Move Register)
 **Format:** `MOV Rx, Ry`
-**Encoding:** `$14 [xxxx yyyy]`
+**Encoding:** `$20 [xxxx yyyy]`
 
 **Operation:**
 ```
@@ -109,9 +51,9 @@ Rx ← Ry
 
 ---
 
-### $15 - SWAP (Swap Registers)
+### $21 - SWAP (Swap Registers)
 **Format:** `SWAP Rx, Ry`
-**Encoding:** `$15 [xxxx yyyy]`
+**Encoding:** `$21 [xxxx yyyy]`
 
 **Operation:**
 ```
@@ -129,11 +71,9 @@ Ry ← temp
 
 ---
 
-## Memory Access Instructions
-
-### $20 - LOAD (Load from Memory)
+### $22 - LOAD (Load from Memory)
 **Format:** `LOAD Rx, Ry`
-**Encoding:** `$20 [xxxx yyyy]`
+**Encoding:** `$22 [xxxx yyyy]`
 
 **Operation:**
 ```
@@ -152,9 +92,9 @@ Rx ← memory[address]
 
 ---
 
-### $21 - STOR (Store to Memory)
+### $23 - STOR (Store to Memory)
 **Format:** `STOR Rx, Ry`
-**Encoding:** `$21 [xxxx yyyy]`
+**Encoding:** `$23 [xxxx yyyy]`
 
 **Operation:**
 ```
@@ -171,9 +111,9 @@ memory[address] ← Rx
 
 ---
 
-### $22 - LOADZ (Load from Zero Page)
+### $24 - LOADZ (Load from Zero Page)
 **Format:** `LOADZ #addr`
-**Encoding:** `$22 [aaaa aaaa]`
+**Encoding:** `$24 [aaaa aaaa]`
 
 **Operation:**
 ```
@@ -191,9 +131,9 @@ R0 ← memory[$00addr]
 
 ---
 
-### $23 - STORZ (Store to Zero Page)
+### $25 - STORZ (Store to Zero Page)
 **Format:** `STORZ #addr`
-**Encoding:** `$23 [aaaa aaaa]`
+**Encoding:** `$25 [aaaa aaaa]`
 
 **Operation:**
 ```
@@ -891,7 +831,50 @@ for each register from Rx toward Ry (inclusive, incrementing):
 
 ---
 
-## Miscellaneous Instructions
+## I/O and Miscellaneous Instructions
+
+### $70 - PRINT (Print Character)
+**Format:** `PRINT Rx`
+**Encoding:** `$70 [xxxx 0000]`
+
+**Operation:**
+```
+stdout ← Rx
+PC ← PC + 2
+```
+
+**Flags:** None affected
+
+**Details:**
+- Outputs the value in Rx as a character to stdout
+- Register value remains unchanged
+- Lower nibble of operand byte ignored (should be 0)
+- Non-blocking operation
+
+---
+
+### $71 - INPUT (Input Character)
+**Format:** `INPUT Rx`
+**Encoding:** `$71 [xxxx 0000]`
+
+**Operation:**
+```
+if (stdin has data)
+    Rx ← next byte from stdin
+else
+    Rx ← $00
+PC ← PC + 2
+```
+
+**Flags:** None affected
+
+**Details:**
+- Reads next byte from stdin into Rx
+- Returns $00 if no input currently available
+- Non-blocking: never waits for input
+- Lower nibble of operand byte ignored (should be 0)
+
+---
 
 ### $00 - NOP (No Operation)
 **Format:** `NOP`
@@ -950,7 +933,7 @@ All instructions execute in a fixed number of cycles (implementation-dependent).
 
 4. **Stack Overflow:** No hardware detection. Stack can overwrite other memory regions.
 
-5. **Big-Endian:** 16-bit values stored high byte first. Affects LDI16, LOAD/STOR, JMPL, CALL/RET, stack operations.
+5. **Big-Endian:** 16-bit values stored high byte first. Affects LOAD/STOR, JMPL, CALL/RET, stack operations.
 
 6. **Flag Persistence:** Flags retain values until modified by flag-affecting instructions. Not all instructions affect all flags.
 
