@@ -68,6 +68,7 @@
 | $43 | NOT | Rx | Rx = ~Rx (bitwise complement) |
 | $44 | SHL | Rx | Shift Rx left, shift Carry into bit 0 |
 | $45 | SHR | Rx | Shift Rx right, shift Carry into bit 7 |
+| $46 | TEST | Rx, Ry | Test Rx & Ry (sets C and Z, no store) |
 
 ### Control Flow (Group 5)
 | Hex | Opcode | Operands | Description |
@@ -95,7 +96,7 @@
 | $00 | NOP | - | No operation |
 | $FF | HLT | - | Halt execution |
 
-## Total Opcodes: 38
+## Total Opcodes: 39
 
 This leaves significant room for future expansion (I/O ports, interrupts, etc.).
 

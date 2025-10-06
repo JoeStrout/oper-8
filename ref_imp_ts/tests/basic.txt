@@ -1,0 +1,184 @@
+// OPER-8 Single-Step Tests
+// Format: preconditions; instruction(s); postconditions
+// All values in hex, flags 0 or 1
+
+// === Data Movement Instructions ===
+
+// LDLO - Load Low Nibble (clears upper nibble, loads lower 4 bits)
+R1:FF; LDLO R1, $A; R1:0A
+R2:AB; LDLO R2, $5; R2:05
+R3:00; LDLO R3, $F; R3:0F
+
+// LDHI - Load High Nibble (preserves lower nibble, loads upper 4 bits)
+R1:0F; LDHI R1, $A; R1:AF
+R2:03; LDHI R2, $B; R2:B3
+R3:00; LDHI R3, $F; R3:F0
+
+// LDI0 - Load immediate into R0
+; LDI0 $42; R0:42
+; LDI0 $00; R0:00
+; LDI0 $FF; R0:FF
+
+// LDI16 - Load 16-bit immediate into register pair
+; LDI16 R1, R2, $1234; R1:12 R2:34
+; LDI16 R5, R6, $ABCD; R5:AB R6:CD
+; LDI16 R0, R1, $0000; R0:00 R1:00
+
+// MOV - Copy register
+R1:42 R2:00; MOV R2, R1; R2:42 R1:42
+R5:FF R6:11; MOV R5, R6; R5:11 R6:11
+
+// SWAP - Exchange registers
+R1:42 R2:AA; SWAP R1, R2; R1:AA R2:42
+R3:FF R4:00; SWAP R3, R4; R3:00 R4:FF
+
+// === Memory Access Instructions ===
+
+// LOAD - Load from memory using register pair as address
+R2:01 R3:50 M[0150]:42; LOAD R5, R2; R5:42
+R4:02 R5:00 M[0200]:AA; LOAD R6, R4; R6:AA
+
+// STOR - Store to memory using register pair as address
+R1:99 R2:01 R3:60; STOR R1, R2; M[0160]:99
+R7:33 R8:02 R9:00; STOR R7, R8; M[0200]:33
+
+// LOADZ - Load from zero page into R0
+M[0010]:55; LOADZ $10; R0:55
+M[00FF]:AA; LOADZ $FF; R0:AA
+
+// STORZ - Store R0 to zero page
+R0:42; STORZ $20; M[0020]:42
+R0:FF; STORZ $00; M[0000]:FF
+
+// === Arithmetic Instructions ===
+
+// ADD - Basic addition
+R1:10 R2:20; ADD R1, R2; R1:30 R2:20 Z:0 C:0 N:0
+R3:FF R4:01; ADD R3, R4; R3:00 Z:1 C:1 N:0
+R5:80 R6:80; ADD R5, R6; R5:00 Z:1 C:1 N:0
+R7:7F R8:01; ADD R7, R8; R7:80 Z:0 C:0 N:1
+
+// ADC - Add with carry
+R1:10 R2:20 C:0; ADC R1, R2; R1:30 C:0
+R3:10 R4:20 C:1; ADC R3, R4; R3:31 C:0
+R5:FF R6:00 C:1; ADC R5, R6; R5:00 Z:1 C:1
+
+// SUB - Subtraction
+R1:50 R2:30; SUB R1, R2; R1:20 Z:0 C:0 N:0
+R3:30 R4:30; SUB R3, R4; R3:00 Z:1 C:0 N:0
+R5:10 R6:20; SUB R5, R6; R5:F0 Z:0 C:1 N:1
+
+// SBC - Subtract with borrow
+R1:50 R2:30 C:0; SBC R1, R2; R1:20 C:0
+R3:50 R4:30 C:1; SBC R3, R4; R3:1F C:0
+R5:10 R6:10 C:1; SBC R5, R6; R5:FF Z:0 C:1 N:1
+
+// INC - Increment
+R1:00; INC R1; R1:01 Z:0 C:0
+R2:FE; INC R2; R2:FF Z:0 C:0 N:1
+R3:FF; INC R3; R3:00 Z:1 C:1
+
+// DEC - Decrement
+R1:02; DEC R1; R1:01 Z:0 C:0
+R2:01; DEC R2; R2:00 Z:1 C:0
+R3:00; DEC R3; R3:FF Z:0 C:1 N:1
+
+// CMP - Compare (already tested above, but adding here for completeness)
+R0:42 R1:42; CMP R1, R0; Z:1 C:0
+R0:40 R1:42; CMP R1, R0; Z:0 C:0 N:0
+R0:42 R1:40; CMP R1, R0; Z:0 C:1 N:1
+
+// MUL - Multiply (8x8=16)
+R1:05 R2:06; MUL R1, R2; R1:00 R2:1E Z:0 C:0
+R3:10 R4:10; MUL R3, R4; R3:01 R4:00 Z:0 C:1
+R5:FF R6:FF; MUL R5, R6; R5:FE R6:01 Z:0 C:1 N:0
+
+// DIV - Divide
+R1:0A R2:03; DIV R1, R2; R1:03 R2:01 Z:0 C:0
+R3:0F R4:04; DIV R3, R4; R3:03 R4:03 Z:0 C:0
+R5:05 R6:0A; DIV R5, R6; R5:00 R6:05 Z:1 C:0
+
+// === Logical Operations ===
+
+// AND - Bitwise AND
+R1:FF R2:0F; AND R1, R2; R1:0F Z:0 C:0 N:0
+R3:AA R4:55; AND R3, R4; R3:00 Z:1 C:0 N:0
+R5:F0 R6:F0; AND R5, R6; R5:F0 Z:0 C:0 N:1
+
+// OR - Bitwise OR
+R1:0F R2:F0; OR R1, R2; R1:FF Z:0 C:0 N:1
+R3:00 R4:00; OR R3, R4; R3:00 Z:1 C:0 N:0
+R5:AA R6:55; OR R5, R6; R5:FF Z:0 C:0 N:1
+
+// XOR - Bitwise XOR
+R1:FF R2:FF; XOR R1, R2; R1:00 Z:1 C:0 N:0
+R3:AA R4:55; XOR R3, R4; R3:FF Z:0 C:0 N:1
+R5:0F R6:F0; XOR R5, R6; R5:FF Z:0 C:0 N:1
+
+// NOT - Bitwise complement
+R1:00; NOT R1; R1:FF Z:0 C:0 N:1
+R2:FF; NOT R2; R2:00 Z:1 C:0 N:0
+R3:AA; NOT R3; R3:55 Z:0 C:0 N:0
+
+// SHL - Shift left (shifts carry in, shifts bit 7 out)
+R1:01 C:0; SHL R1; R1:02 C:0 Z:0 N:0
+R2:80 C:0; SHL R2; R2:00 C:1 Z:1 N:0
+R3:41 C:1; SHL R3; R3:83 C:0 Z:0 N:1
+
+// SHR - Shift right (shifts carry in, shifts bit 0 out)
+R1:02 C:0; SHR R1; R1:01 C:0 Z:0 N:0
+R2:01 C:0; SHR R2; R2:00 C:1 Z:1 N:0
+R3:82 C:1; SHR R3; R3:C1 C:0 Z:0 N:1
+
+// TEST - Test bits (like AND but doesn't store, preserves C)
+R1:FF R2:80 C:1; TEST R1, R2; R1:FF R2:80 C:1 Z:0 N:1
+R3:0F R4:F0 C:0; TEST R3, R4; R3:0F R4:F0 C:0 Z:1 N:0
+R5:AA R6:AA C:1; TEST R5, R6; R5:AA R6:AA C:1 Z:0 N:1
+
+// === Control Flow Instructions ===
+
+// JMP - Relative jump (PC starts at $0100 for tests)
+PC:0100; JMP 4; PC:0106
+PC:0100; JMP $FE; PC:0100
+
+// JMPL - Absolute jump via register pair
+R1:02 R2:50; JMPL R1, R2; PC:0250
+
+// JZ - Jump if zero
+Z:1; JZ 4; PC:0106
+Z:0; JZ 4; PC:0102
+
+// JNZ - Jump if not zero
+Z:0; JNZ 4; PC:0106
+Z:1; JNZ 4; PC:0102
+
+// JC - Jump if carry
+C:1; JC 4; PC:0106
+C:0; JC 4; PC:0102
+
+// JNC - Jump if not carry
+C:0; JNC 4; PC:0106
+C:1; JNC 4; PC:0102
+
+// JN - Jump if negative
+N:1; JN 4; PC:0106
+N:0; JN 4; PC:0102
+
+// === Stack Operations ===
+
+// PUSH - Push single register
+R1:42 R14:10 R15:00; PUSH R1, R1; R14:0F R15:FF M[0FFF]:42
+
+// PUSH - Push multiple registers (R5 pushed first to highest addr, R7 last to lowest)
+R5:11 R6:22 R7:33 R14:10 R15:00; PUSH R5, R7; R14:0F R15:FD M[0FFD]:33 M[0FFE]:22 M[0FFF]:11
+
+// POP - Pop single register
+R14:0F R15:FF M[0FFF]:55; POP R2, R2; R2:55 R14:10 R15:00
+
+// POP - Pop multiple registers
+R14:0F R15:FD M[0FFD]:AA M[0FFE]:BB M[0FFF]:CC; POP R8, R10; R8:AA R9:BB R10:CC R14:10 R15:00
+
+// === Miscellaneous ===
+
+// NOP - No operation (PC advances by 2)
+PC:0100; NOP; PC:0102

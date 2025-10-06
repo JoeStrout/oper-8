@@ -570,6 +570,49 @@ C ← bit0
 
 ---
 
+### $46 - TEST (Test Bits)
+**Format:** `TEST Rx, Ry`
+**Encoding:** `$46 [xxxx yyyy]`
+
+**Operation:**
+```
+result ← Rx & Ry
+(result discarded, only flags set)
+```
+
+**Flags:**
+- **Z:** Set if (Rx & Ry) == 0
+- **C:** Unchanged
+- **N:** Set if bit 7 of (Rx & Ry) is 1
+
+**Details:**
+- Performs bitwise AND but doesn't store result
+- Both registers remain unchanged
+- Useful for testing if specific bits are set
+- Common idioms:
+  - `TEST Rx, Rx` - test if Rx is zero (sets Z if zero)
+  - `TEST Rx, Ry` with Ry as bit mask - test specific bits
+- Unlike other logical operations (AND/OR/XOR/NOT), TEST preserves the Carry flag
+- This allows testing values mid-calculation without losing carry state
+
+**Examples:**
+```
+; Test if R1 is zero
+TEST R1, R1
+JZ is_zero
+
+; Test if bit 7 of R1 is set
+LDI0 $80
+TEST R1, R0
+JN bit7_set
+
+; Test if R1 and R2 have any common bits set
+TEST R1, R2
+JNZ have_common_bits
+```
+
+---
+
 ## Control Flow Instructions
 
 ### $50 - JMP (Jump Relative)
