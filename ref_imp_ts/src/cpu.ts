@@ -509,6 +509,8 @@ export class CPU {
         } else {
           this.registers[rx] = 0;
         }
+        this.flagZ = this.registers[rx] === 0;
+        this.flagN = (this.registers[rx] & 0x80) !== 0;
         this.pc += 2;
         break;
 

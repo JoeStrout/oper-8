@@ -35,10 +35,28 @@ function parseRegister(s: string): number {
 
 /**
  * Parse an immediate value (hex with $ prefix, or decimal)
+ * Can also be a label reference (resolved later)
  */
-function parseImmediate(s: string): number {
+function parseImmediate(s: string, labels?: Map<string, number>, currentAddr?: number): number {
   s = s.trim().toUpperCase();
   let value: number;
+
+  // Check if it's a label reference
+  if (labels && /^[A-Z_][A-Z0-9_]*$/.test(s)) {
+    const labelAddr = labels.get(s);
+    if (labelAddr === undefined) {
+      throw new AssemblerError(`Undefined label: ${s}`);
+    }
+    // Calculate relative offset from instruction after this one
+    if (currentAddr !== undefined) {
+      const offset = labelAddr - (currentAddr + 2);
+      if (offset < -128 || offset > 127) {
+        throw new AssemblerError(`Label ${s} out of range: ${offset}`);
+      }
+      return offset & 0xFF;
+    }
+    return labelAddr;
+  }
 
   if (s.startsWith('$')) {
     value = parseInt(s.substring(1), 16);
@@ -545,4 +563,88 @@ export function disassemble(opcode: number, operand: number, nextBytes?: number[
     case 0xFF: return 'HLT';
     default: return `??? [$${toHex(opcode)} $${toHex(operand)}]`;
   }
+}
+
+/**
+ * Assemble multiple lines with label support
+ * Labels are defined with a colon suffix: "loop:"
+ * Labels can be referenced in jump instructions: "JMP loop"
+ */
+export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Array {
+  const labels = new Map<string, number>();
+  const instructions: { line: string; addr: number }[] = [];
+
+  // First pass: find labels and calculate addresses
+  let addr = startAddr;
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip empty lines and comments
+    if (trimmed === '' || trimmed.startsWith(';') || trimmed.startsWith('//')) {
+      continue;
+    }
+
+    // Check for label definition (ends with :)
+    if (trimmed.endsWith(':')) {
+      const label = trimmed.substring(0, trimmed.length - 1).trim().toUpperCase();
+      if (labels.has(label)) {
+        throw new AssemblerError(`Duplicate label: ${label}`);
+      }
+      labels.set(label, addr);
+      continue;
+    }
+
+    // Regular instruction
+    instructions.push({ line: trimmed, addr });
+    addr += 2; // All instructions are 2 bytes
+  }
+
+  // Second pass: assemble instructions with label resolution
+  const bytes: number[] = [];
+  for (const { line, addr } of instructions) {
+    const assembled = assembleLine(line, labels, addr);
+    bytes.push(assembled.opcode, assembled.operand);
+  }
+
+  return new Uint8Array(bytes);
+}
+
+/**
+ * Assemble a single line with label support
+ */
+function assembleLine(instruction: string, labels: Map<string, number>, currentAddr: number): AssembledInstruction {
+  instruction = instruction.trim().toUpperCase();
+
+  // Split into mnemonic and operands
+  const parts = instruction.split(/[\s,]+/).filter(s => s.length > 0);
+  if (parts.length === 0) {
+    throw new AssemblerError('Empty instruction');
+  }
+
+  const mnemonic = parts[0];
+  const operands = parts.slice(1);
+
+  // For jump/branch instructions, resolve label if present
+  const isJump = ['JMP', 'JZ', 'JNZ', 'JC', 'JNC', 'JN', 'CALL'].includes(mnemonic);
+
+  if (isJump && operands.length === 1) {
+    const operandStr = operands[0];
+    // Try to resolve as label
+    if (/^[A-Z_][A-Z0-9_]*$/i.test(operandStr)) {
+      const labelAddr = labels.get(operandStr.toUpperCase());
+      if (labelAddr !== undefined) {
+        // Calculate relative offset
+        const offset = labelAddr - (currentAddr + 2);
+        if (offset < -128 || offset > 127) {
+          throw new AssemblerError(`Label ${operandStr} out of range: ${offset}`);
+        }
+        // Replace operand with calculated offset
+        operands[0] = `$${(offset & 0xFF).toString(16).toUpperCase()}`;
+      }
+    }
+  }
+
+  // Now assemble normally (this will use the updated original assemble function)
+  const originalInstruction = [mnemonic, ...operands].join(' ');
+  return assemble(originalInstruction);
 }

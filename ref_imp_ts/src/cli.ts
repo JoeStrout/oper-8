@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as readline from 'readline';
 import { CPU } from './cpu.js';
-import { assemble, disassemble, AssemblerError } from './assembler.js';
+import { assemble, disassemble, assembleProgram, AssemblerError } from './assembler.js';
 
 // Input buffer for character I/O
 let inputBuffer: number[] = [];
@@ -244,58 +244,33 @@ function interactive(): void {
 
       case 'asm': {
         console.log(`Assembling at PC=${toHex(cpu.pc, 4)} (enter blank line to exit):`);
-        let currentAddr = cpu.pc;
+        const startAddr = cpu.pc;
+        const lines: string[] = [];
 
         const asmLoop = () => {
           rl.question('  ', (line) => {
             const trimmedLine = line.trim();
 
             if (trimmedLine === '') {
-              // Blank line - exit asm mode
-              console.log(`Assembly complete. ${currentAddr - cpu.pc} bytes written.`);
+              // Blank line - assemble all collected lines
+              try {
+                const bytes = assembleProgram(lines, startAddr);
+                // Write to memory
+                cpu.memory.set(bytes, startAddr);
+                console.log(`Assembly complete. ${bytes.length} bytes written.`);
+              } catch (err) {
+                if (err instanceof AssemblerError) {
+                  console.error(`Assembly error: ${err.message}`);
+                } else {
+                  console.error(`Error: ${err}`);
+                }
+              }
               rl.prompt();
               return;
             }
 
-            try {
-              // Check if it's a raw data word (starts with $)
-              if (trimmedLine.startsWith('$')) {
-                const value = parseInt(trimmedLine.substring(1), 16);
-                if (isNaN(value)) {
-                  console.error(`Invalid hex value: ${trimmedLine}`);
-                } else {
-                  // Write as 16-bit word (big-endian)
-                  cpu.memory[currentAddr] = (value >> 8) & 0xFF;
-                  cpu.memory[currentAddr + 1] = value & 0xFF;
-                  console.log(`  ${toHex(currentAddr, 4)}: ${toHex((value >> 8) & 0xFF)} ${toHex(value & 0xFF)} ; data word $${toHex(value, 4)}`);
-                  currentAddr += 2;
-                }
-              } else {
-                // Assemble instruction
-                const assembled = assemble(trimmedLine);
-                cpu.memory[currentAddr] = assembled.opcode;
-                cpu.memory[currentAddr + 1] = assembled.operand;
-
-                let bytesStr = `${toHex(assembled.opcode)} ${toHex(assembled.operand)}`;
-                let totalLength = 2;
-
-                if (assembled.immediate) {
-                  cpu.memory[currentAddr + 2] = assembled.immediate[0];
-                  cpu.memory[currentAddr + 3] = assembled.immediate[1];
-                  bytesStr += ` ${toHex(assembled.immediate[0])} ${toHex(assembled.immediate[1])}`;
-                  totalLength = 4;
-                }
-
-                console.log(`  ${toHex(currentAddr, 4)}: ${bytesStr} ; ${trimmedLine}`);
-                currentAddr += totalLength;
-              }
-            } catch (err) {
-              if (err instanceof AssemblerError) {
-                console.error(`  Assembly error: ${err.message}`);
-              } else {
-                console.error(`  Error: ${err}`);
-              }
-            }
+            // Collect line (including labels)
+            lines.push(trimmedLine);
 
             // Continue asm loop
             asmLoop();

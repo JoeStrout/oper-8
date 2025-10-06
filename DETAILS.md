@@ -866,13 +866,17 @@ else
 PC ← PC + 2
 ```
 
-**Flags:** None affected
+**Flags:**
+- **Z:** Set if Rx == 0 after input
+- **N:** Set if bit 7 of Rx is 1
+- **C:** Unchanged
 
 **Details:**
 - Reads next byte from stdin into Rx
 - Returns $00 if no input currently available
 - Non-blocking: never waits for input
 - Lower nibble of operand byte ignored (should be 0)
+- Sets Z flag, allowing direct conditional branching without TEST
 
 ---
 
