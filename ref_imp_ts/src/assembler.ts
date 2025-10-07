@@ -115,6 +115,44 @@ function parseImmediate(s: string, labels?: Map<string, number>, currentAddr?: n
     return labelAddr;
   }
 
+  // Pascal string literal (p'...')
+  if (s.toLowerCase().startsWith("p'")) {
+    if (!s.endsWith("'") || s.length < 4) {
+      throw new AssemblerError(`Invalid Pascal string literal: ${original}`);
+    }
+    const content = s.substring(2, s.length - 1);
+    const chars: number[] = [];
+
+    for (let i = 0; i < content.length; i++) {
+      if (content[i] === '\\' && i + 1 < content.length) {
+        // Escape sequence (case-insensitive)
+        const nextChar = content[i + 1].toLowerCase();
+        switch (nextChar) {
+          case '0': chars.push(0); break;
+          case 'n': chars.push(10); break;
+          case 'r': chars.push(13); break;
+          case 't': chars.push(9); break;
+          case '\\': chars.push(92); break;
+          case "'": chars.push(39); break;
+          default:
+            throw new AssemblerError(`Invalid escape sequence: \\${content[i + 1]}`);
+        }
+        i++; // Skip next character
+      } else {
+        chars.push(content.charCodeAt(i));
+      }
+    }
+
+    // Prepend length byte
+    const result = [chars.length, ...chars];
+
+    if (allowMultiByte) {
+      return result;
+    }
+
+    throw new AssemblerError(`Pascal string not allowed here (use in .data): ${original}`);
+  }
+
   // Character literal(s)
   if (s.startsWith("'")) {
     if (!s.endsWith("'") || s.length < 3) {
