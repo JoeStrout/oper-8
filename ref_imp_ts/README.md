@@ -17,21 +17,24 @@ npm start -- <program.bin>
 
 ## Usage
 
+**Note:** After making code changes, rebuild with `npm run build` before running.
+
 ### Run a program
 
 ```bash
-node dist/cli.js program.bin
+npm start -- <program.bin>
+npm start -- <program.asm>
 ```
 
 ### Interactive mode (REPL)
 
 ```bash
-node dist/cli.js -i
+npm start -- -i
 ```
 
 Commands available in interactive mode:
 - `load <file>` - Load binary file into memory
-- `run [steps]` - Run CPU (max steps, default 100000)
+- `run [steps]` - Run CPU (max steps, default 100000; use 0 for unlimited)
 - `step` - Execute one instruction
 - `reset` - Reset CPU
 - `regs` - Show registers
@@ -39,10 +42,19 @@ Commands available in interactive mode:
 - `poke <addr> <val>` - Write byte to memory (hex)
 - `quit` - Exit
 
+### Interactive mode with program loaded
+
+```bash
+npm start -- -i <program.bin>
+npm start -- -i <program.asm>
+```
+
+Loads and assembles the program but drops into interactive mode for debugging.
+
 ### Debug mode (step through)
 
 ```bash
-node dist/cli.js -d program.bin
+npm start -- -d <program.bin>
 ```
 
 ## Development
@@ -58,30 +70,45 @@ npm run dev -- -i
 - `src/cli.ts` - Command-line interface
 - `dist/` - Compiled JavaScript output
 
-## Creating Test Programs
+## Creating Programs
+
+### Assembly Language
+
+The assembler supports:
+- Labels and label references
+- Multiple literal formats: decimal, hex (`$6E`, `0x6E`), binary (`0b1110`), character (`'a'`, `'\n'`)
+- Directives: `.org <addr>` to set assembly location, `.data` for data bytes
+- High/low byte operators: `>label` and `<label` for extracting address bytes
+- Comments: `;` or `//`
+
+Example assembly program (hello.asm):
+
+```assembly
+.org 0x200
+
+main:
+  LDI0 >message   ; High byte of message address
+  LDI1 <message   ; Low byte of message address
+
+print_loop:
+  LOAD R2, R0
+  TEST R2, R2
+  JZ done
+  PRINT R2
+  INC R1
+  JNC print_loop
+  INC R0
+  JMP print_loop
+
+done:
+  HLT
+
+message:
+.data 'Hello, World!\n' 0
+```
+
+See the `tests/` directory for more example programs.
+
+### Binary Programs
 
 Programs are raw binary files. Each instruction is 2 bytes (opcode + operand).
-
-Example: Simple program that outputs 'H' and halts
-
-```
-12 48    ; LDI0 'H' ($48)
-23 FA    ; STORZ $FA (output port)
-FF FF    ; HLT
-```
-
-Save as hex and convert to binary, or write directly with a hex editor.
-
-## Memory-Mapped I/O
-
-- `$00FA` - Character output (write-only)
-- `$00FB` - Character input (read-only, returns $00 if none available)
-- `$00FC-$00FD` - Fault PC storage
-- `$00FE-$00FF` - Fault handler vector (default: $FFFE)
-
-## Next Steps
-
-- Add assembler to create programs from assembly source
-- Add disassembler for debugging
-- Create web-based interface
-- Add comprehensive test suite

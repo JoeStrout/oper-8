@@ -34,16 +34,70 @@ function parseRegister(s: string): number {
 }
 
 /**
- * Parse an immediate value (hex with $ prefix, or decimal)
+ * Parse an immediate value supporting multiple formats:
+ * - Decimal: 123
+ * - Hex: $6E, 0x6E, 0X6E
+ * - Binary: 0b1110, 0B1110
+ * - Character: 'a', '\n', '\t', '\r', '\0'
+ * - Multi-character (for .data): 'abc' (returns array)
+ * - High byte: >label or HIGH(label)
+ * - Low byte: <label or LOW(label)
  * Can also be a label reference (resolved later)
  */
-function parseImmediate(s: string, labels?: Map<string, number>, currentAddr?: number): number {
-  s = s.trim().toUpperCase();
-  let value: number;
+function parseImmediate(s: string, labels?: Map<string, number>, currentAddr?: number, allowMultiByte: boolean = false): number | number[] {
+  const original = s;
+  s = s.trim();
+  let value: number | number[];
 
-  // Check if it's a label reference
-  if (labels && /^[A-Z_][A-Z0-9_]*$/.test(s)) {
-    const labelAddr = labels.get(s);
+  // Check for high byte operator: >label or HIGH(label)
+  if (labels && s.startsWith('>')) {
+    const labelName = s.substring(1).trim().toUpperCase();
+    const labelAddr = labels.get(labelName);
+    if (labelAddr === undefined) {
+      throw new AssemblerError(`Undefined label: ${labelName}`);
+    }
+    return (labelAddr >> 8) & 0xFF;
+  }
+
+  if (labels && /^HIGH\s*\(/i.test(s)) {
+    const match = s.match(/^HIGH\s*\(\s*([A-Z_][A-Z0-9_]*)\s*\)/i);
+    if (!match) {
+      throw new AssemblerError(`Invalid HIGH() syntax: ${original}`);
+    }
+    const labelName = match[1].toUpperCase();
+    const labelAddr = labels.get(labelName);
+    if (labelAddr === undefined) {
+      throw new AssemblerError(`Undefined label: ${labelName}`);
+    }
+    return (labelAddr >> 8) & 0xFF;
+  }
+
+  // Check for low byte operator: <label or LOW(label)
+  if (labels && s.startsWith('<')) {
+    const labelName = s.substring(1).trim().toUpperCase();
+    const labelAddr = labels.get(labelName);
+    if (labelAddr === undefined) {
+      throw new AssemblerError(`Undefined label: ${labelName}`);
+    }
+    return labelAddr & 0xFF;
+  }
+
+  if (labels && /^LOW\s*\(/i.test(s)) {
+    const match = s.match(/^LOW\s*\(\s*([A-Z_][A-Z0-9_]*)\s*\)/i);
+    if (!match) {
+      throw new AssemblerError(`Invalid LOW() syntax: ${original}`);
+    }
+    const labelName = match[1].toUpperCase();
+    const labelAddr = labels.get(labelName);
+    if (labelAddr === undefined) {
+      throw new AssemblerError(`Undefined label: ${labelName}`);
+    }
+    return labelAddr & 0xFF;
+  }
+
+  // Check if it's a label reference (case-insensitive)
+  if (labels && /^[A-Z_][A-Z0-9_]*$/i.test(s)) {
+    const labelAddr = labels.get(s.toUpperCase());
     if (labelAddr === undefined) {
       throw new AssemblerError(`Undefined label: ${s}`);
     }
@@ -58,19 +112,83 @@ function parseImmediate(s: string, labels?: Map<string, number>, currentAddr?: n
     return labelAddr;
   }
 
+  // Character literal(s)
+  if (s.startsWith("'")) {
+    if (!s.endsWith("'") || s.length < 3) {
+      throw new AssemblerError(`Invalid character literal: ${original}`);
+    }
+    const content = s.substring(1, s.length - 1);
+    const chars: number[] = [];
+
+    for (let i = 0; i < content.length; i++) {
+      if (content[i] === '\\' && i + 1 < content.length) {
+        // Escape sequence (case-insensitive)
+        const nextChar = content[i + 1].toLowerCase();
+        switch (nextChar) {
+          case '0': chars.push(0); break;
+          case 'n': chars.push(10); break;
+          case 'r': chars.push(13); break;
+          case 't': chars.push(9); break;
+          case '\\': chars.push(92); break;
+          case "'": chars.push(39); break;
+          default:
+            throw new AssemblerError(`Invalid escape sequence: \\${content[i + 1]}`);
+        }
+        i++; // Skip next character
+      } else {
+        chars.push(content.charCodeAt(i));
+      }
+    }
+
+    if (chars.length === 0) {
+      throw new AssemblerError(`Empty character literal: ${original}`);
+    }
+
+    if (chars.length === 1) {
+      return chars[0];
+    }
+
+    if (allowMultiByte) {
+      return chars;
+    }
+
+    throw new AssemblerError(`Multi-character literal not allowed here: ${original}`);
+  }
+
+  // Hex with $ prefix
   if (s.startsWith('$')) {
     value = parseInt(s.substring(1), 16);
-  } else if (s.startsWith('0X')) {
+  }
+  // Hex with 0x prefix (case-insensitive)
+  else if (s.toLowerCase().startsWith('0x')) {
     value = parseInt(s.substring(2), 16);
-  } else {
+  }
+  // Binary with 0b prefix (case-insensitive)
+  else if (s.toLowerCase().startsWith('0b')) {
+    value = parseInt(s.substring(2), 2);
+  }
+  // Decimal
+  else {
     value = parseInt(s, 10);
   }
 
-  if (isNaN(value)) {
-    throw new AssemblerError(`Invalid immediate value: ${s}`);
+  if (isNaN(value as number)) {
+    throw new AssemblerError(`Invalid immediate value: ${original}`);
   }
 
-  return value;
+  // For multi-byte values in .data directive
+  if (allowMultiByte && value > 255) {
+    // Return as big-endian bytes
+    const bytes: number[] = [];
+    let v = value as number;
+    while (v > 0) {
+      bytes.unshift(v & 0xFF);
+      v = v >>> 8;
+    }
+    return bytes.length > 0 ? bytes : [0];
+  }
+
+  return value as number;
 }
 
 /**
@@ -99,82 +217,82 @@ export function assemble(instruction: string): AssembledInstruction {
     // Load Immediate
     case 'LDI0': {
       if (operands.length !== 1) throw new AssemblerError('LDI0 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x10, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI1': {
       if (operands.length !== 1) throw new AssemblerError('LDI1 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x11, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI2': {
       if (operands.length !== 1) throw new AssemblerError('LDI2 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x12, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI3': {
       if (operands.length !== 1) throw new AssemblerError('LDI3 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x13, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI4': {
       if (operands.length !== 1) throw new AssemblerError('LDI4 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x14, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI5': {
       if (operands.length !== 1) throw new AssemblerError('LDI5 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x15, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI6': {
       if (operands.length !== 1) throw new AssemblerError('LDI6 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x16, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI7': {
       if (operands.length !== 1) throw new AssemblerError('LDI7 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x17, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI8': {
       if (operands.length !== 1) throw new AssemblerError('LDI8 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x18, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI9': {
       if (operands.length !== 1) throw new AssemblerError('LDI9 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x19, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI10': {
       if (operands.length !== 1) throw new AssemblerError('LDI10 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x1A, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI11': {
       if (operands.length !== 1) throw new AssemblerError('LDI11 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x1B, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI12': {
       if (operands.length !== 1) throw new AssemblerError('LDI12 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x1C, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI13': {
       if (operands.length !== 1) throw new AssemblerError('LDI13 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x1D, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI14': {
       if (operands.length !== 1) throw new AssemblerError('LDI14 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x1E, operand: imm & 0xFF, length: 2 };
     }
     case 'LDI15': {
       if (operands.length !== 1) throw new AssemblerError('LDI15 requires 1 operand: #imm');
-      const imm = parseImmediate(operands[0]);
+      const imm = parseImmediate(operands[0]) as number;
       return { opcode: 0x1F, operand: imm & 0xFF, length: 2 };
     }
 
@@ -219,7 +337,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('LOADZ requires 1 operand: #addr');
       }
-      const addr = parseImmediate(operands[0]);
+      const addr = parseImmediate(operands[0]) as number;
       return { opcode: 0x24, operand: addr & 0xFF, length: 2 };
     }
 
@@ -227,7 +345,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('STORZ requires 1 operand: #addr');
       }
-      const addr = parseImmediate(operands[0]);
+      const addr = parseImmediate(operands[0]) as number;
       return { opcode: 0x25, operand: addr & 0xFF, length: 2 };
     }
 
@@ -377,7 +495,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('JMP requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x50, operand: offset & 0xFF, length: 2 };
     }
 
@@ -394,7 +512,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('JZ requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x52, operand: offset & 0xFF, length: 2 };
     }
 
@@ -402,7 +520,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('JNZ requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x53, operand: offset & 0xFF, length: 2 };
     }
 
@@ -410,7 +528,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('JC requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x54, operand: offset & 0xFF, length: 2 };
     }
 
@@ -418,7 +536,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('JNC requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x55, operand: offset & 0xFF, length: 2 };
     }
 
@@ -426,7 +544,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('JN requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x56, operand: offset & 0xFF, length: 2 };
     }
 
@@ -434,7 +552,7 @@ export function assemble(instruction: string): AssembledInstruction {
       if (operands.length !== 1) {
         throw new AssemblerError('CALL requires 1 operand: offset');
       }
-      const offset = parseImmediate(operands[0]);
+      const offset = parseImmediate(operands[0]) as number;
       return { opcode: 0x57, operand: offset & 0xFF, length: 2 };
     }
 
@@ -566,21 +684,90 @@ export function disassemble(opcode: number, operand: number, nextBytes?: number[
 }
 
 /**
- * Assemble multiple lines with label support
+ * Assemble multiple lines with label support and directives
  * Labels are defined with a colon suffix: "loop:"
  * Labels can be referenced in jump instructions: "JMP loop"
+ * Directives:
+ * - .org 0x500 : Set origin address
+ * - .data 1 2 3 : Insert data bytes
  */
 export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Array {
   const labels = new Map<string, number>();
-  const instructions: { line: string; addr: number }[] = [];
+  const items: Array<{ type: 'instruction' | 'data', line?: string, data?: number[], addr: number }> = [];
 
-  // First pass: find labels and calculate addresses
+  // First pass: find labels, directives, and calculate addresses
   let addr = startAddr;
   for (const line of lines) {
-    const trimmed = line.trim();
+    let trimmed = line.trim();
 
     // Skip empty lines and comments
     if (trimmed === '' || trimmed.startsWith(';') || trimmed.startsWith('//')) {
+      continue;
+    }
+
+    // Remove inline comments (semicolon or //)
+    let commentIndex = trimmed.indexOf(';');
+    if (commentIndex < 0) {
+      commentIndex = trimmed.indexOf('//');
+    }
+    if (commentIndex >= 0) {
+      trimmed = trimmed.substring(0, commentIndex).trim();
+      if (trimmed === '') continue;
+    }
+
+    // Check for .org directive
+    if (trimmed.toLowerCase().startsWith('.org')) {
+      const parts = trimmed.split(/\s+/);
+      if (parts.length !== 2) {
+        throw new AssemblerError('.org requires one argument: address');
+      }
+      const newAddr = parseImmediate(parts[1]) as number;
+      addr = newAddr;
+      continue;
+    }
+
+    // Check for .data directive
+    if (trimmed.toLowerCase().startsWith('.data')) {
+      const dataLine = trimmed.substring(5).trim();
+      if (dataLine.length === 0) {
+        throw new AssemblerError('.data requires at least one value');
+      }
+
+      // Parse data values (handle quoted strings specially)
+      const parts: string[] = [];
+      let current = '';
+      let inQuote = false;
+
+      for (let i = 0; i < dataLine.length; i++) {
+        const ch = dataLine[i];
+        if (ch === "'" && (i === 0 || dataLine[i - 1] !== '\\')) {
+          inQuote = !inQuote;
+          current += ch;
+        } else if (!inQuote && /\s/.test(ch)) {
+          if (current.length > 0) {
+            parts.push(current);
+            current = '';
+          }
+        } else {
+          current += ch;
+        }
+      }
+      if (current.length > 0) {
+        parts.push(current);
+      }
+
+      const dataBytes: number[] = [];
+      for (const part of parts) {
+        const value = parseImmediate(part, undefined, undefined, true);
+        if (Array.isArray(value)) {
+          dataBytes.push(...value);
+        } else {
+          dataBytes.push(value & 0xFF);
+        }
+      }
+
+      items.push({ type: 'data', data: dataBytes, addr });
+      addr += dataBytes.length;
       continue;
     }
 
@@ -595,18 +782,67 @@ export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Ar
     }
 
     // Regular instruction
-    instructions.push({ line: trimmed, addr });
+    items.push({ type: 'instruction', line: trimmed, addr });
     addr += 2; // All instructions are 2 bytes
   }
 
   // Second pass: assemble instructions with label resolution
-  const bytes: number[] = [];
-  for (const { line, addr } of instructions) {
-    const assembled = assembleLine(line, labels, addr);
-    bytes.push(assembled.opcode, assembled.operand);
+  const result: Array<{ addr: number, bytes: number[] }> = [];
+
+  for (const item of items) {
+    if (item.type === 'data') {
+      result.push({ addr: item.addr, bytes: item.data! });
+    } else {
+      const assembled = assembleLine(item.line!, labels, item.addr);
+      result.push({ addr: item.addr, bytes: [assembled.opcode, assembled.operand] });
+    }
   }
 
-  return new Uint8Array(bytes);
+  // Find the range of addresses
+  if (result.length === 0) {
+    return new Uint8Array(0);
+  }
+
+  const minAddr = result[0].addr;
+  const maxAddr = result[result.length - 1].addr + result[result.length - 1].bytes.length - 1;
+  const size = maxAddr - minAddr + 1;
+
+  // Create output buffer
+  const output = new Uint8Array(size);
+
+  // Fill in bytes
+  for (const item of result) {
+    const offset = item.addr - minAddr;
+    for (let i = 0; i < item.bytes.length; i++) {
+      output[offset + i] = item.bytes[i];
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Assemble from a file's contents
+ * Returns the assembled bytes and the starting address
+ */
+export function assembleFile(content: string, defaultStartAddr: number = 0x200): { bytes: Uint8Array, startAddr: number } {
+  const lines = content.split('\n');
+
+  // Look for first .org directive to determine start address
+  let startAddr = defaultStartAddr;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.toLowerCase().startsWith('.org')) {
+      const parts = trimmed.split(/\s+/);
+      if (parts.length === 2) {
+        startAddr = parseImmediate(parts[1]) as number;
+        break;
+      }
+    }
+  }
+
+  const bytes = assembleProgram(lines, startAddr);
+  return { bytes, startAddr };
 }
 
 /**
@@ -640,6 +876,49 @@ function assembleLine(instruction: string, labels: Map<string, number>, currentA
         }
         // Replace operand with calculated offset
         operands[0] = `$${(offset & 0xFF).toString(16).toUpperCase()}`;
+      }
+    }
+  }
+
+  // Resolve high/low byte operators for all instructions
+  for (let i = 0; i < operands.length; i++) {
+    const op = operands[i];
+    // Handle >label (high byte)
+    if (op.startsWith('>')) {
+      const labelName = op.substring(1).trim().toUpperCase();
+      const labelAddr = labels.get(labelName);
+      if (labelAddr !== undefined) {
+        operands[i] = `$${((labelAddr >> 8) & 0xFF).toString(16).toUpperCase()}`;
+      }
+    }
+    // Handle <label (low byte)
+    else if (op.startsWith('<')) {
+      const labelName = op.substring(1).trim().toUpperCase();
+      const labelAddr = labels.get(labelName);
+      if (labelAddr !== undefined) {
+        operands[i] = `$${(labelAddr & 0xFF).toString(16).toUpperCase()}`;
+      }
+    }
+    // Handle HIGH(label)
+    else if (/^HIGH\s*\(/i.test(op)) {
+      const match = op.match(/^HIGH\s*\(\s*([A-Z_][A-Z0-9_]*)\s*\)/i);
+      if (match) {
+        const labelName = match[1].toUpperCase();
+        const labelAddr = labels.get(labelName);
+        if (labelAddr !== undefined) {
+          operands[i] = `$${((labelAddr >> 8) & 0xFF).toString(16).toUpperCase()}`;
+        }
+      }
+    }
+    // Handle LOW(label)
+    else if (/^LOW\s*\(/i.test(op)) {
+      const match = op.match(/^LOW\s*\(\s*([A-Z_][A-Z0-9_]*)\s*\)/i);
+      if (match) {
+        const labelName = match[1].toUpperCase();
+        const labelAddr = labels.get(labelName);
+        if (labelAddr !== undefined) {
+          operands[i] = `$${(labelAddr & 0xFF).toString(16).toUpperCase()}`;
+        }
       }
     }
   }

@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as readline from 'readline';
 import { CPU } from './cpu.js';
-import { assemble, disassemble, assembleProgram, AssemblerError } from './assembler.js';
+import { assemble, disassemble, assembleProgram, assembleFile, AssemblerError } from './assembler.js';
 
 // Input buffer for character I/O
 let inputBuffer: number[] = [];
@@ -36,31 +36,108 @@ function createCPU(): CPU {
 }
 
 /**
- * Load and run a binary file
+ * Load and run a binary or assembly file
  */
-function runProgram(filename: string, debug: boolean = false): void {
+async function runProgramOrAssembly(filename: string, debug: boolean = false): Promise<void> {
   try {
-    const program = fs.readFileSync(filename);
+    const isAssembly = filename.toLowerCase().endsWith('.asm');
     const cpu = createCPU();
-    cpu.loadProgram(new Uint8Array(program));
+    let program: Uint8Array;
+    let startAddr: number;
 
-    console.log(`Loaded ${program.length} bytes from ${filename}`);
+    if (isAssembly) {
+      // Assemble the file
+      const content = fs.readFileSync(filename, 'utf-8');
+      console.log(`Assembling ${filename}...`);
+      const { bytes, startAddr: addr } = assembleFile(content);
+      program = bytes;
+      startAddr = addr;
+      console.log(`Assembled ${program.length} bytes, start address: $${startAddr.toString(16).toUpperCase().padStart(4, '0')}`);
+
+      // Load into memory at the start address
+      cpu.memory.set(program, startAddr);
+      cpu.pc = startAddr;
+    } else {
+      // Load binary file
+      program = new Uint8Array(fs.readFileSync(filename));
+      cpu.loadProgram(program);
+      startAddr = cpu.pc;
+      console.log(`Loaded ${program.length} bytes from ${filename}`);
+    }
+
     console.log('Starting execution...\n');
 
     if (debug) {
       debugProgram(cpu);
     } else {
-      const steps = cpu.run();
-      console.log(`\nExecution complete. Total steps: ${steps}`);
-      console.log(`Halted: ${cpu.halted}`);
-      showCPUState(cpu);
+      // Set up stdin to feed input buffer for programs that use INPUT
+      process.stdin.setRawMode(true);
+      process.stdin.setEncoding('utf8');
+      process.stdin.on('data', (key: string) => {
+        // Handle Ctrl+C
+        if (key === '\u0003') {
+          if (process.stdin.isTTY) {
+            process.stdin.setRawMode(false);
+          }
+          process.exit(0);
+        }
+        // Add each character to the input buffer
+        for (let i = 0; i < key.length; i++) {
+          inputBuffer.push(key.charCodeAt(i));
+        }
+      });
+
+      try {
+        // Run in chunks to allow I/O events to be processed
+        let totalSteps = 0;
+        const runAsync = async () => {
+          while (!cpu.halted) {
+            // Run 1000 steps at a time, then yield to event loop
+            const steps = cpu.run(1000);
+            totalSteps += steps;
+            if (steps < 1000) break; // Halted
+            await new Promise(resolve => setImmediate(resolve));
+          }
+          return totalSteps;
+        };
+
+        const steps = await runAsync();
+        console.log(`\nExecution complete. Total steps: ${steps}`);
+        console.log(`Halted: ${cpu.halted}`);
+        showCPUState(cpu);
+      } catch (err) {
+        // If there's a fault during execution, drop into interactive mode
+        if (err instanceof Error && err.message.includes('fault')) {
+          console.error(`\n${err.message}`);
+          console.log('\nDropping into interactive mode...\n');
+          interactive(cpu);
+        } else {
+          throw err;
+        }
+      } finally {
+        // Restore stdin
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdin.pause();
+      }
     }
   } catch (err) {
-    if (err instanceof Error) {
+    if (err instanceof AssemblerError) {
+      console.error(`Assembly Error: ${err.message}`);
+      process.exit(1);
+    } else if (err instanceof Error) {
       console.error(`Error: ${err.message}`);
     }
     process.exit(1);
   }
+}
+
+/**
+ * Load and run a binary file (deprecated, use runProgramOrAssembly)
+ */
+async function runProgram(filename: string, debug: boolean = false): Promise<void> {
+  await runProgramOrAssembly(filename, debug);
 }
 
 /**
@@ -115,10 +192,51 @@ function showCPUState(cpu: CPU): void {
 }
 
 /**
+ * Load a program file and drop into interactive mode
+ */
+function loadProgramAndInteractive(filename: string): void {
+  try {
+    const isAssembly = filename.toLowerCase().endsWith('.asm');
+    const cpu = createCPU();
+
+    if (isAssembly) {
+      // Assemble the file
+      const content = fs.readFileSync(filename, 'utf-8');
+      console.log(`Assembling ${filename}...`);
+      const { bytes, startAddr } = assembleFile(content);
+      console.log(`Assembled ${bytes.length} bytes, start address: $${startAddr.toString(16).toUpperCase().padStart(4, '0')}`);
+
+      // Load into memory at the start address
+      cpu.memory.set(bytes, startAddr);
+      cpu.pc = startAddr;
+    } else {
+      // Load binary file
+      const program = new Uint8Array(fs.readFileSync(filename));
+      cpu.loadProgram(program);
+      console.log(`Loaded ${program.length} bytes from ${filename}`);
+    }
+
+    console.log('');
+    interactive(cpu);
+
+  } catch (err) {
+    if (err instanceof AssemblerError) {
+      console.error(`Assembly Error: ${err.message}`);
+      process.exit(1);
+    } else if (err instanceof Error) {
+      console.error(`Error: ${err.message}`);
+    }
+    process.exit(1);
+  }
+}
+
+/**
  * Interactive mode (REPL)
  */
-function interactive(): void {
-  const cpu = createCPU();
+function interactive(cpu?: CPU): void {
+  if (!cpu) {
+    cpu = createCPU();
+  }
   console.log('OPER-8 Interactive Mode');
   console.log('Type "help" for commands\n');
 
@@ -695,18 +813,18 @@ function runTestFile(filename: string): void {
 /**
  * Main entry point
  */
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
     console.log('OPER-8 CPU Emulator');
     console.log('\nUsage:');
-    console.log('  oper8 <program.bin>       Run a binary program');
-    console.log('  oper8 -i                  Interactive mode (REPL)');
-    console.log('  oper8 -d <program.bin>    Debug mode (step through)');
-    console.log('  oper8 -ss <test>          Run single-step test');
-    console.log('  oper8 -t <file>           Run tests from file');
-    console.log('  oper8 -h                  Show this help');
+    console.log('  oper8 <program.bin|.asm>     Run a binary or assembly program');
+    console.log('  oper8 -i [program.bin|.asm]  Interactive mode (optionally load program)');
+    console.log('  oper8 -d <program.bin|.asm>  Debug mode (step through)');
+    console.log('  oper8 -ss <test>             Run single-step test');
+    console.log('  oper8 -t <file>              Run tests from file');
+    console.log('  oper8 -h                     Show this help');
     console.log('\nSingle-step test format:');
     console.log('  "preconditions; instruction(s); postconditions"');
     console.log('  Example: "R0:40 R1:42; CMP R1, R0; Z:0 C:0"');
@@ -714,10 +832,15 @@ function main(): void {
   }
 
   if (args[0] === '-i') {
-    interactive();
+    if (args[1]) {
+      // Load program and drop into interactive mode
+      loadProgramAndInteractive(args[1]);
+    } else {
+      interactive();
+    }
   } else if (args[0] === '-d') {
     if (args[1]) {
-      runProgram(args[1], true);
+      await runProgramOrAssembly(args[1], true);
     } else {
       console.error('Error: -d requires a program file');
       process.exit(1);
@@ -739,7 +862,7 @@ function main(): void {
       process.exit(1);
     }
   } else {
-    runProgram(args[0], false);
+    await runProgramOrAssembly(args[0], false);
   }
 }
 

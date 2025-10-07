@@ -85,11 +85,18 @@ export class CPU {
 
   /**
    * Run CPU until halted or max steps reached
+   * If maxSteps is 0, runs indefinitely until halted
    */
   run(maxSteps: number = 100000): number {
     let steps = 0;
-    while (steps < maxSteps && this.step()) {
-      steps++;
+    if (maxSteps === 0) {
+      while (this.step()) {
+        steps++;
+      }
+    } else {
+      while (steps < maxSteps && this.step()) {
+        steps++;
+      }
     }
     return steps;
   }
