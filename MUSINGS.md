@@ -18,6 +18,8 @@ While very standard, the C/N/Z flags work really well.  I should have included i
 
 The assembler/disassembler and CLI (command-line interface) built for this prototype worked really well, too.  Especially useful was the single-step test feature, which can be used as a command line argument, or you can put a whole bunch of them in a file like [this](tests/basic.txt).
 
+I was pleased with the [fault-handling](FAULT_HANDLING.md) system; it will allow a fantasy computer to drop into a mini-assembler or monitor when something goes wrong, instead of just locking up or exiting.
+
 ## Problems & Misgivings
 
 I very quickly found that there just wasn't enough operand space for many reasonable operations.  For example, to load an immediate value into a register, I initially had to use two instructions: LDLO and LDHI to load the low and high nibble, respectively.
@@ -67,11 +69,12 @@ So where does that leave us?  I'm not happy with OPER-8 as it is; it's functiona
   - Remove display and sound support from the instruction set, using memory-mapped I/O for these instead, so that console/computer designers can make their own choices while using the same CPU chip.  This will simplify the instruction set and also free up opcode space.
   - Remove hex key instructions -- those too should simply be memory-mapped.
   - Add PRINT and INPUT, because good golly these are nice.
+  - CHIP-8 doesn't have C, N, and Z flags; instead it uses R15 (vF) as the single variable-purpose flag register, and has several "skip next instruction if" opcodes.  I don't love it, but I guess I can live with it.
   - Ensure the I register can access all 64k of memory.
   - Maybe add an additional memory register (J?), so we can easily & efficiently do things like copy from one area of memory to another?
-  - Add the register-management instructions from XO-CHIP, e.g. 5xy2 and 5xy3.
-  - Maybe add ways to push/pop registers to/from the stack, too.  (In other CHIP-8 variants, the stack is used *only* for the call return address.)
-  - CHIP-8 doesn't have C, N, and Z flags; instead it uses R15 as the single variable-purpose flag register, and has several "skip next instruction if" opcodes.  I don't love it, but I guess I can live with it.
+  - Ensure we can _jump_ to any address in 64k memory.
+  - Add the register-management instructions from XO-CHIP, e.g. 5xy2 and 5xy3 (LOAD and SAVE register range).  Maybe ditch or modify Fx55 and Fx65, which make low-numbered registers precious; try to keep all registers equal (except for vF).
+  - Instead of the fixed 12- or 16-level call stack, implement a proper stack in memory, allowing storage of values as well as return address.  Maybe the stack needs to be its own wide register.
   
-Of course if I remove all the key, display, and sound instructions from the instruction set, is it really a CHIP-8 variant?  Probably, though some might disagree.
+Of course if I remove all the key, display, and sound instructions from the instruction set, and make the other changes above, is it really a CHIP-8 variant?  Probably, though some might disagree.
 
