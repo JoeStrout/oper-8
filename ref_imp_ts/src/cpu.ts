@@ -488,12 +488,12 @@ export class CPU {
       // POP
       case 0x61: {
         let sp = (this.registers[14] << 8) | this.registers[15];
-        let r = rx;
+        let r = ry;
         do {
           this.registers[r] = this.memory[sp];
           sp = (sp + 1) & 0xFFFF;
-          if (r === ry) break;
-          r = (r + 1) & 0x0F;
+          if (r === rx) break;
+          r = (r - 1) & 0x0F;
         } while (true);
         this.registers[14] = (sp >> 8) & 0xFF;
         this.registers[15] = sp & 0xFF;

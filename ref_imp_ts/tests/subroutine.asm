@@ -11,13 +11,17 @@ main:
   ; Call a simple subroutine
   LDI0 'A'
   CALL print_char
+  CALL print_char
+  CALL print_char
+  LDI0 '!'
+  CALL print_char
 
   LDI0 '\n'
   PRINT R0
 
   HLT
 
-; Subroutine: print character in R0
+; Subroutine: print character in R0.
 print_char:
   PRINT R0
   RET

@@ -71,7 +71,9 @@ async function runProgramOrAssembly(filename: string, debug: boolean = false): P
       debugProgram(cpu);
     } else {
       // Set up stdin to feed input buffer for programs that use INPUT
-      process.stdin.setRawMode(true);
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(true);
+      }
       process.stdin.setEncoding('utf8');
       process.stdin.on('data', (key: string) => {
         // Handle Ctrl+C
@@ -180,7 +182,11 @@ function debugProgram(cpu: CPU): void {
  */
 function showCPUState(cpu: CPU): void {
   console.log('=== CPU State ===');
-  console.log(`PC: ${toHex(cpu.pc, 4)}  Flags: Z=${b(cpu.flagZ)} C=${b(cpu.flagC)} N=${b(cpu.flagN)}`);
+  const opcode = cpu.memory[cpu.pc];
+  const operand = cpu.memory[cpu.pc + 1];
+  const nextBytes = [cpu.memory[cpu.pc + 2], cpu.memory[cpu.pc + 3]];
+  const instruction = disassemble(opcode, operand, nextBytes);
+  console.log(`PC: ${toHex(cpu.pc, 4)}  Flags: Z=${b(cpu.flagZ)} C=${b(cpu.flagC)} N=${b(cpu.flagN)}  [${instruction}]`);
   console.log('Registers:');
   for (let i = 0; i < 16; i += 4) {
     const regs = [i, i + 1, i + 2, i + 3]
@@ -355,7 +361,7 @@ function interactive(cpu?: CPU): void {
         console.log('  reset           - Reset CPU');
         console.log('  regs            - Show registers');
         console.log('  mem <addr>      - Show memory at address (hex)');
-        console.log('  dis <addr> [n]  - Disassemble n instructions at address');
+        console.log('  dis [addr] [n]  - Disassemble n instructions at address (default: PC)');
         console.log('  poke <addr> <val> - Write byte to memory (hex)');
         console.log('  quit            - Exit');
         break;
@@ -451,30 +457,28 @@ function interactive(cpu?: CPU): void {
         }
         break;
 
-      case 'dis':
-        if (args[1]) {
-          const addr = parseInt(args[1], 16);
-          const count = args[2] ? parseInt(args[2]) : 8;
-          let currentAddr = addr;
-          for (let i = 0; i < count; i++) {
-            const opcode = cpu.memory[currentAddr];
-            const operand = cpu.memory[currentAddr + 1];
-            const nextBytes = [cpu.memory[currentAddr + 2], cpu.memory[currentAddr + 3]];
-            const instruction = disassemble(opcode, operand, nextBytes);
-            const bytes = `${toHex(opcode)} ${toHex(operand)}`;
-            console.log(`${toHex(currentAddr, 4)}: ${bytes.padEnd(6)} ${instruction}`);
+      case 'dis': {
+        const addr = args[1] ? parseInt(args[1], 16) : cpu.pc;
+        const count = args[2] ? parseInt(args[2]) : 8;
+        let currentAddr = addr;
+        for (let i = 0; i < count; i++) {
+          const opcode = cpu.memory[currentAddr];
+          const operand = cpu.memory[currentAddr + 1];
+          const nextBytes = [cpu.memory[currentAddr + 2], cpu.memory[currentAddr + 3]];
+          const instruction = disassemble(opcode, operand, nextBytes);
+          const bytes = `${toHex(opcode)} ${toHex(operand)}`;
+          const marker = currentAddr === cpu.pc ? '>' : ' ';
+          console.log(`${marker}${toHex(currentAddr, 4)}: ${bytes.padEnd(6)} ${instruction}`);
 
-            // Check if this is LDI16 (4 bytes instead of 2)
-            if (opcode === 0x13) {
-              currentAddr += 4;
-            } else {
-              currentAddr += 2;
-            }
+          // Check if this is LDI16 (4 bytes instead of 2)
+          if (opcode === 0x13) {
+            currentAddr += 4;
+          } else {
+            currentAddr += 2;
           }
-        } else {
-          console.log('Usage: dis <addr> [count]');
         }
         break;
+      }
 
       case 'poke':
         if (args[1] && args[2]) {

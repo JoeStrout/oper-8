@@ -12,9 +12,12 @@ export interface AssembledInstruction {
 }
 
 export class AssemblerError extends Error {
-  constructor(message: string) {
-    super(message);
+  lineNumber?: number;
+
+  constructor(message: string, lineNumber?: number) {
+    super(lineNumber !== undefined ? `Line ${lineNumber}: ${message}` : message);
     this.name = 'AssemblerError';
+    this.lineNumber = lineNumber;
   }
 }
 
@@ -192,6 +195,35 @@ function parseImmediate(s: string, labels?: Map<string, number>, currentAddr?: n
 }
 
 /**
+ * Tokenize an instruction into parts, preserving quoted strings
+ */
+function tokenize(instruction: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let inQuote = false;
+
+  for (let i = 0; i < instruction.length; i++) {
+    const ch = instruction[i];
+    if (ch === "'" && (i === 0 || instruction[i - 1] !== '\\')) {
+      inQuote = !inQuote;
+      current += ch;
+    } else if (!inQuote && (ch === ' ' || ch === '\t' || ch === ',')) {
+      if (current.length > 0) {
+        parts.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current.length > 0) {
+    parts.push(current);
+  }
+
+  return parts;
+}
+
+/**
  * Assemble a single instruction from assembly text
  * Returns the opcode and operand bytes
  */
@@ -200,7 +232,8 @@ export function assemble(instruction: string): AssembledInstruction {
   instruction = instruction.trim().toUpperCase();
 
   // Split into mnemonic and operands
-  const parts = instruction.split(/[\s,]+/).filter(s => s.length > 0);
+  const parts = tokenize(instruction);
+
   if (parts.length === 0) {
     throw new AssemblerError('Empty instruction');
   }
@@ -693,11 +726,12 @@ export function disassemble(opcode: number, operand: number, nextBytes?: number[
  */
 export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Array {
   const labels = new Map<string, number>();
-  const items: Array<{ type: 'instruction' | 'data', line?: string, data?: number[], addr: number }> = [];
+  const items: Array<{ type: 'instruction' | 'data', line?: string, data?: number[], addr: number, lineNumber: number }> = [];
 
   // First pass: find labels, directives, and calculate addresses
   let addr = startAddr;
-  for (const line of lines) {
+  for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+    const line = lines[lineNumber];
     let trimmed = line.trim();
 
     // Skip empty lines and comments
@@ -717,21 +751,29 @@ export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Ar
 
     // Check for .org directive
     if (trimmed.toLowerCase().startsWith('.org')) {
-      const parts = trimmed.split(/\s+/);
-      if (parts.length !== 2) {
-        throw new AssemblerError('.org requires one argument: address');
+      try {
+        const parts = trimmed.split(/\s+/);
+        if (parts.length !== 2) {
+          throw new AssemblerError('.org requires one argument: address');
+        }
+        const newAddr = parseImmediate(parts[1]) as number;
+        addr = newAddr;
+        continue;
+      } catch (e) {
+        if (e instanceof AssemblerError && e.lineNumber === undefined) {
+          throw new AssemblerError(e.message.replace(/^Line \d+: /, ''), lineNumber + 1);
+        }
+        throw e;
       }
-      const newAddr = parseImmediate(parts[1]) as number;
-      addr = newAddr;
-      continue;
     }
 
     // Check for .data directive
     if (trimmed.toLowerCase().startsWith('.data')) {
-      const dataLine = trimmed.substring(5).trim();
-      if (dataLine.length === 0) {
-        throw new AssemblerError('.data requires at least one value');
-      }
+      try {
+        const dataLine = trimmed.substring(5).trim();
+        if (dataLine.length === 0) {
+          throw new AssemblerError('.data requires at least one value');
+        }
 
       // Parse data values (handle quoted strings specially)
       const parts: string[] = [];
@@ -756,33 +798,50 @@ export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Ar
         parts.push(current);
       }
 
-      const dataBytes: number[] = [];
-      for (const part of parts) {
-        const value = parseImmediate(part, undefined, undefined, true);
-        if (Array.isArray(value)) {
-          dataBytes.push(...value);
-        } else {
-          dataBytes.push(value & 0xFF);
+        const dataBytes: number[] = [];
+        for (const part of parts) {
+          const value = parseImmediate(part, undefined, undefined, true);
+          if (Array.isArray(value)) {
+            dataBytes.push(...value);
+          } else {
+            dataBytes.push(value & 0xFF);
+          }
         }
-      }
 
-      items.push({ type: 'data', data: dataBytes, addr });
-      addr += dataBytes.length;
-      continue;
+        items.push({ type: 'data', data: dataBytes, addr, lineNumber: lineNumber + 1 });
+        addr += dataBytes.length;
+        // Ensure addr remains even (all instructions must be at even addresses)
+        if (addr % 2 !== 0) {
+          addr++;
+        }
+        continue;
+      } catch (e) {
+        if (e instanceof AssemblerError && e.lineNumber === undefined) {
+          throw new AssemblerError(e.message.replace(/^Line \d+: /, ''), lineNumber + 1);
+        }
+        throw e;
+      }
     }
 
     // Check for label definition (ends with :)
     if (trimmed.endsWith(':')) {
-      const label = trimmed.substring(0, trimmed.length - 1).trim().toUpperCase();
-      if (labels.has(label)) {
-        throw new AssemblerError(`Duplicate label: ${label}`);
+      try {
+        const label = trimmed.substring(0, trimmed.length - 1).trim().toUpperCase();
+        if (labels.has(label)) {
+          throw new AssemblerError(`Duplicate label: ${label}`);
+        }
+        labels.set(label, addr);
+        continue;
+      } catch (e) {
+        if (e instanceof AssemblerError && e.lineNumber === undefined) {
+          throw new AssemblerError(e.message.replace(/^Line \d+: /, ''), lineNumber + 1);
+        }
+        throw e;
       }
-      labels.set(label, addr);
-      continue;
     }
 
     // Regular instruction
-    items.push({ type: 'instruction', line: trimmed, addr });
+    items.push({ type: 'instruction', line: trimmed, addr, lineNumber: lineNumber + 1 });
     addr += 2; // All instructions are 2 bytes
   }
 
@@ -793,8 +852,15 @@ export function assembleProgram(lines: string[], startAddr: number = 0): Uint8Ar
     if (item.type === 'data') {
       result.push({ addr: item.addr, bytes: item.data! });
     } else {
-      const assembled = assembleLine(item.line!, labels, item.addr);
-      result.push({ addr: item.addr, bytes: [assembled.opcode, assembled.operand] });
+      try {
+        const assembled = assembleLine(item.line!, labels, item.addr);
+        result.push({ addr: item.addr, bytes: [assembled.opcode, assembled.operand] });
+      } catch (e) {
+        if (e instanceof AssemblerError && e.lineNumber === undefined) {
+          throw new AssemblerError(e.message.replace(/^Line \d+: /, ''), item.lineNumber);
+        }
+        throw e;
+      }
     }
   }
 

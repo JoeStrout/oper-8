@@ -1,3 +1,6 @@
+; Very simple pseudo-random number generator.
+; Prints several random characters.
+
 .org 0x200
 LDI0 42
 LDI9 5

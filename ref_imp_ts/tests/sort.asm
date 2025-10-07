@@ -19,9 +19,8 @@ inner_loop:
   ; Load current and next elements
   LOAD R2, R0     ; Current element
   INC R1          ; Point to next
-  JNC no_carry1
+  JNC 2
   INC R0
-no_carry1:
   LOAD R3, R0     ; Next element
 
   ; Compare and swap if needed
@@ -30,14 +29,12 @@ no_carry1:
 
   ; Swap elements
   DEC R1          ; Back to current
-  JNC no_borrow
+  JNC 2
   DEC R0
-no_borrow:
   STOR R3, R0     ; Store next value at current
   INC R1
-  JNC no_carry2
+  JNC 2
   INC R0
-no_carry2:
   STOR R2, R0     ; Store current value at next
 
 no_swap:
@@ -64,9 +61,8 @@ print_loop:
   PRINT R3
 
   INC R1
-  JNC no_carry3
+  JNC 2
   INC R0
-no_carry3:
   DEC R2
   JNZ print_loop
 

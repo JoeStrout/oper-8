@@ -1,12 +1,17 @@
 ; Hexdump - print first 16 bytes of memory in hex
-; Demonstrates: DIV for hex conversion, memory reading
+; Demonstrates: DIV for hex conversion, memory reading, subroutines
 
 .org 0x200
 
 main:
+  ; Initialize stack pointer
+  LDI14 0x04
+  LDI15 0x00
+
   LDI0 0x02       ; Start address high
   LDI1 0x00       ; Start address low
-  LDI2 16         ; Counter
+  LDI2 16         ; Counter (how many bytes to show)
+  LDI8 16         ; Constant 16 (hexadecimal base)
 
 dump_loop:
   ; Load byte
@@ -14,34 +19,12 @@ dump_loop:
 
   ; Print high nibble
   MOV R4, R3
-  LDI5 16
-  DIV R4, R5      ; R4 = high nibble, R5 = low nibble
-
-  ; Convert high nibble to hex ASCII
-  LDI6 9
-  CMP R4, R6
-  JC digit1
-  LDI6 55         ; 'A' - 10
-  ADD R4, R6
-  JMP print1
-digit1:
-  LDI6 '0'
-  ADD R4, R6
-print1:
-  PRINT R4
+  DIV R4, R8      ; R4 = high nibble, R5 = low nibble
+  CALL print_hex_digit
 
   ; Print low nibble
-  LDI6 9
-  CMP R5, R6
-  JC digit2
-  LDI6 55
-  ADD R5, R6
-  JMP print2
-digit2:
-  LDI6 '0'
-  ADD R5, R6
-print2:
-  PRINT R5
+  MOV R4, R5
+  CALL print_hex_digit
 
   ; Print space
   LDI4 ' '
@@ -49,9 +32,8 @@ print2:
 
   ; Increment address
   INC R1
-  JNC no_carry
+  JNC 2
   INC R0
-no_carry:
 
   ; Decrement counter
   DEC R2
@@ -62,3 +44,20 @@ no_carry:
   PRINT R0
 
   HLT
+
+; Subroutine: print hex digit
+; Reads: R4 (digit to print, 0-15)
+; Clobbers: R4, R6
+print_hex_digit:
+  LDI6 10
+  CMP R4, R6
+  JC hex_digit    ; Jump if R4 < 10
+  LDI6 55         ; 'A' - 10
+  ADD R4, R6
+  JMP hex_print
+hex_digit:
+  LDI6 '0'
+  ADD R4, R6
+hex_print:
+  PRINT R4
+  RET
